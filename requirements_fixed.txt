@@ -1,0 +1,19 @@
+# Core dependencies - compatible versions for Python 3.12
+python-binance>=1.0.19
+pandas>=2.1.0
+numpy>=1.26.0,<2.0.0
+requests>=2.31.0
+
+# Dashboard
+streamlit>=1.29.0
+plotly>=5.18.0
+
+# Technical indicators - use only ta (skip pandas-ta to avoid conflicts)
+ta>=0.11.0
+
+# Data storage
+sqlalchemy>=2.0.23
+
+# Utilities
+python-dotenv>=1.0.0
+pytz>=2023.3
