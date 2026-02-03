@@ -111,27 +111,39 @@ class MarketDataCollector:
     
     def get_funding_rate(self, symbol):
         """
-        Get current funding rate for perpetual futures
-        
-        Returns:
-            Dict with funding rate, next funding time, mark price
+        Get current funding rate and mark price for perpetual futures.
+        Uses the 'futures_mark_price' endpoint which is more reliable for real-time data.
         """
         try:
             self._rate_limit()
-            # Get premium index which includes funding rate
-            premium = self.client.futures_funding_rate(symbol=symbol, limit=1)
+            # Mark price endpoint includes current funding rate
+            data = self.client.futures_mark_price(symbol=symbol)
             
-            if premium:
-                latest = premium[-1]
+            if data:
                 return {
                     'symbol': symbol,
-                    'funding_rate': float(latest['fundingRate']),
-                    'funding_time': pd.to_datetime(latest['fundingTime'], unit='ms'),
-                    'mark_price': None  # Will get separately if needed
+                    'funding_rate': float(data['lastFundingRate']),
+                    'funding_time': pd.to_datetime(data['nextFundingTime'], unit='ms'),
+                    'mark_price': float(data['markPrice'])
                 }
             return None
         except Exception as e:
             print(f"Error fetching funding rate for {symbol}: {e}")
+            return None
+
+    def get_futures_price(self, symbol):
+        """Get current price for perpetual futures using Mark Price as fallback"""
+        try:
+            self._rate_limit()
+            try:
+                ticker = self.client.futures_symbol_ticker(symbol=symbol)
+                return float(ticker['price'])
+            except:
+                # Fallback to mark price if ticker fails
+                data = self.client.futures_mark_price(symbol=symbol)
+                return float(data['markPrice']) if data else None
+        except Exception as e:
+            print(f"Error fetching futures price for {symbol}: {e}")
             return None
     
     def get_funding_rate_history(self, symbol, limit=100):

@@ -97,6 +97,12 @@ class DemoDataGenerator:
             'funding_time': datetime.now(),
             'mark_price': self.current_price
         }
+
+    def get_futures_price(self, symbol):
+        """Generate demo futures price with a small spread"""
+        # Perps usually trade at a small premium/discount to spot
+        spread_pct = np.random.randn() * 0.0005 
+        return self.current_price * (1 + spread_pct)
     
     def get_open_interest(self, symbol):
         """Generate open interest data"""
