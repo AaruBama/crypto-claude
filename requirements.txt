@@ -5,7 +5,7 @@ numpy==1.26.2
 requests==2.31.0
 
 # Dashboard
-streamlit==1.29.0
+streamlit>=1.40.0
 plotly==5.18.0
 
 # Technical indicators
@@ -17,5 +17,7 @@ sqlalchemy==2.0.23
 
 # Utilities
 python-dotenv==1.0.0
+
 # AI Integration
 google-generativeai==0.3.2
+anthropic>=0.18.0

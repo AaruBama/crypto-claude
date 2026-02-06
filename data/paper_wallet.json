@@ -1,15 +1,19 @@
 {
-    "balance_usd": 1006.2946723128082,
+    "balance_usd": 813.9601103137052,
     "positions": {
         "BTCUSDT": {
-            "amount": 0.0,
-            "avg_price": 75800.0,
-            "highest_price": 76846.99,
-            "lowest_price": 75800.0,
-            "stop_loss": null,
-            "take_profit": null,
-            "trailing_stop_percent": null,
-            "scaling_targets": []
+            "amount": 0.002913152255263142,
+            "avg_price": 69848.73503689215,
+            "highest_price": 69947.75,
+            "lowest_price": 69750.0,
+            "stop_loss": 68200.0,
+            "take_profit": 73500.0,
+            "trailing_stop_percent": 2.0,
+            "scaling_targets": [
+                71500.0,
+                72500.0,
+                73500.0
+            ]
         },
         "ETHUSDT": {
             "amount": 0.0,
@@ -18,6 +22,16 @@
             "lowest_price": 0,
             "take_profit": null,
             "stop_loss": null,
+            "trailing_stop_percent": null,
+            "scaling_targets": []
+        },
+        "SOLUSDT": {
+            "amount": 0.0,
+            "avg_price": 98.5,
+            "highest_price": 101.36,
+            "lowest_price": 98.5,
+            "stop_loss": null,
+            "take_profit": null,
             "trailing_stop_percent": null,
             "scaling_targets": []
         }
@@ -118,6 +132,54 @@
             "price": 76718.88,
             "amount": 0.00014888,
             "total_usd": 11.42
+        },
+        {
+            "time": "2026-02-04 02:54:26",
+            "pair": "SOLUSDT",
+            "type": "BUY",
+            "price": 98.5,
+            "amount": 1.02161896,
+            "total_usd": 100.63
+        },
+        {
+            "time": "2026-02-04 03:32:47",
+            "pair": "SOLUSDT",
+            "type": "SELL",
+            "price": 99.81,
+            "amount": 1.02161896,
+            "total_usd": 101.97
+        },
+        {
+            "time": "2026-02-04 03:51:08",
+            "pair": "BTCUSDT",
+            "type": "BUY",
+            "price": 74850.0,
+            "amount": 0.01345357,
+            "total_usd": 1007.0
+        },
+        {
+            "time": "2026-02-04 04:16:59",
+            "pair": "BTCUSDT",
+            "type": "SELL",
+            "price": 75578.96,
+            "amount": 0.01345357,
+            "total_usd": 1016.81
+        },
+        {
+            "time": "2026-02-06 23:40:18",
+            "pair": "BTCUSDT",
+            "type": "BUY",
+            "price": 69750.0,
+            "amount": 0.00145864,
+            "total_usd": 101.74
+        },
+        {
+            "time": "2026-02-06 23:40:26",
+            "pair": "BTCUSDT",
+            "type": "BUY",
+            "price": 69947.75,
+            "amount": 0.00145451,
+            "total_usd": 101.74
         }
     ],
     "initial_balance": 953.0427923883577

@@ -68,7 +68,7 @@ class PaperWallet:
                 return 0.0
         return 0.0
 
-    def execute_strategy(self, strategy):
+    def execute_strategy(self, strategy, override_usd=None):
         """Executes a strategy and attaches automated orders"""
         action_raw = str(strategy.get('action', 'WAIT')).upper()
         params = strategy.get('trade_params', {})
@@ -84,7 +84,12 @@ class PaperWallet:
         if balance <= 0:
             return False, f"Insufficient account balance (${balance:,.2f}) to open a trade."
 
-        usd_amount = balance * 0.1 # Trade 10% of balance
+        # Use override amount if provided, otherwise default to 10%
+        usd_amount = override_usd if override_usd is not None else (balance * 0.1)
+        
+        if usd_amount > balance and "BUY" in action_raw:
+             return False, f"Not enough balance (${balance:,.2f}) for a ${usd_amount:,.2f} trade."
+
         amount = usd_amount / price
 
         success, msg = False, f"Action '{action_raw}' not recognized. Use BUY or SELL."

@@ -1,0 +1,12 @@
+[client]
+# Disable the loading spinner overlay
+showSpinner = false
+
+[runner]
+# Faster script rerun
+fastReruns = true
+
+[server]
+# Enable CORS for local development
+enableCORS = false
+enableXsrfProtection = false
