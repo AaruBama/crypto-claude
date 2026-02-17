@@ -32,8 +32,35 @@ class IndicatorCalculator:
         df = df.copy()
         
         # Moving Averages using ta library
-        df['ema_50'] = ta.trend.ema_indicator(df['close'], window=config.INDICATORS['ema_short'])
-        df['ema_200'] = ta.trend.ema_indicator(df['close'], window=config.INDICATORS['ema_long'])
+        # Calculate dynamic EMAs from config
+        processed_periods = set()
+        
+        # Add default fixed EMAs to the set to ensure they are calculated if not in strategies
+        if config.INDICATORS['ema_short'] not in processed_periods:
+             df[f"ema_{config.INDICATORS['ema_short']}"] = ta.trend.ema_indicator(df['close'], window=config.INDICATORS['ema_short'])
+             processed_periods.add(config.INDICATORS['ema_short'])
+             
+        if config.INDICATORS['ema_long'] not in processed_periods:
+             df[f"ema_{config.INDICATORS['ema_long']}"] = ta.trend.ema_indicator(df['close'], window=config.INDICATORS['ema_long'])
+             processed_periods.add(config.INDICATORS['ema_long'])
+
+        # Calculate strategy-specific EMAs
+        if hasattr(config, 'STRATEGIES'):
+            for strat_name, strat_config in config.STRATEGIES.items():
+                if strat_config.get('type') == 'ema_cross':
+                    fast = strat_config.get('fast')
+                    slow = strat_config.get('slow')
+                    
+                    if fast and fast not in processed_periods:
+                        df[f"ema_{fast}"] = ta.trend.ema_indicator(df['close'], window=fast)
+                        processed_periods.add(fast)
+                        
+                    if slow and slow not in processed_periods:
+                        df[f"ema_{slow}"] = ta.trend.ema_indicator(df['close'], window=slow)
+                        processed_periods.add(slow)
+        
+        # Legacy aliases for backward compatibility if needed (e.g. if code references specific columns)
+        # We ensure ema_50 and ema_200 are always available as 'ema_50' and 'ema_200' columns above.
         
         # RSI
         df['rsi'] = ta.momentum.rsi(df['close'], window=config.INDICATORS['rsi_period'])
@@ -73,6 +100,17 @@ class IndicatorCalculator:
         # Z-score (for mean reversion)
         df['z_score'] = IndicatorCalculator._calculate_zscore(df['close'], window=20)
         
+        # MACD
+        macd = ta.trend.MACD(
+            df['close'], 
+            window_slow=config.INDICATORS.get('macd_slow', 26), 
+            window_fast=config.INDICATORS.get('macd_fast', 12), 
+            window_sign=config.INDICATORS.get('macd_signal', 9)
+        )
+        df['macd_line'] = macd.macd()
+        df['macd_signal'] = macd.macd_signal()
+        df['macd_hist'] = macd.macd_diff()
+
         # Range metrics
         df['daily_range_pct'] = ((df['high'] - df['low']) / df['close']) * 100
         
@@ -200,3 +238,170 @@ class IndicatorCalculator:
             'prev_low': yesterday['low'].min(),
             'prev_close': yesterday['close'].iloc[-1] if len(yesterday) > 0 else df['close'].iloc[-1]
         }
+
+    @staticmethod
+    def detect_all_signals(df):
+        """
+        Detect signals for all strategies defined in config.STRATEGIES.
+        Supports: 'ema_cross', 'oscillator', 'volatility_breakout', 'macd_cross', 'price_action'
+        Returns a dictionary of Signal Objects.
+        """
+        if df is None or len(df) < 50:
+            return {}
+        
+        results = {}
+        
+        if not hasattr(config, 'STRATEGIES'):
+            return results
+            
+        latest = df.iloc[-1]
+            
+        for strat_key, strat_config in config.STRATEGIES.items():
+            strat_type = strat_config.get('type')
+            
+            # Default neutral state
+            signal_obj = {
+                "signal": "neutral",
+                "time_ago": "N/A",
+                "description": "No active signal",
+                "value": 0.0,
+                "threshold": 0.0
+            }
+
+            # --- EMA CROSS (Trend) ---
+            if strat_type == 'ema_cross':
+                fast_period = strat_config.get('fast')
+                slow_period = strat_config.get('slow')
+                fast_col = f"ema_{fast_period}"
+                slow_col = f"ema_{slow_period}"
+                
+                if fast_col in df.columns and slow_col in df.columns:
+                    diff = latest[fast_col] - latest[slow_col]
+                    signal_obj["value"] = round(latest[fast_col], 2)
+                    signal_obj["threshold"] = round(latest[slow_col], 2)
+                    
+                    recent = df.tail(50).copy()
+                    recent['diff'] = recent[fast_col] - recent[slow_col]
+                    crosses = (recent['diff'] > 0) != (recent['diff'].shift(1) > 0)
+                    crosses = crosses.iloc[1:]
+                    cross_indices = crosses[crosses].index
+                    
+                    if len(cross_indices) > 0:
+                        last_cross_time = cross_indices[-1]
+                        is_bullish = recent.loc[last_cross_time, 'diff'] > 0
+                        direction = "bullish" if is_bullish else "bearish"
+                        time_str = IndicatorCalculator._format_time_ago(df.index[-1] - last_cross_time)
+                        
+                        signal_obj.update({
+                            "signal": direction,
+                            "time_ago": time_str,
+                            "description": f"{direction.capitalize()} Cross ({fast_period}/{slow_period})"
+                        })
+
+            # --- OSCILLATOR (RSI) ---
+            elif strat_type == 'oscillator':
+                if 'rsi' in df.columns:
+                    val = latest['rsi']
+                    buy_thr = strat_config.get('buy_threshold', 30)
+                    sell_thr = strat_config.get('sell_threshold', 70)
+                    
+                    signal_obj["value"] = round(val, 1)
+                    
+                    if val < buy_thr:
+                        signal_obj.update({
+                            "signal": "bullish",
+                            "time_ago": "NOW",
+                            "description": f"Oversold (RSI {round(val,1)})"
+                        })
+                    elif val > sell_thr:
+                        signal_obj.update({
+                            "signal": "bearish",
+                            "time_ago": "NOW",
+                            "description": f"Overbought (RSI {round(val,1)})"
+                        })
+
+            # --- VOLATILITY BREAKOUT (Bollinger) ---
+            elif strat_type == 'volatility_breakout':
+                if 'bb_upper' in df.columns:
+                    price = latest['close']
+                    bb_width = latest.get('bb_width', 0)
+                    squeeze_thr = strat_config.get('squeeze_threshold', 100) # Default huge if not set
+                    
+                    # Check for recent squeeze (last 5 candles)
+                    recent_squeeze = (df['bb_width'].tail(5) < squeeze_thr).any()
+                    
+                    if recent_squeeze:
+                        if price > latest['bb_upper']:
+                             signal_obj.update({
+                                "signal": "bullish",
+                                "time_ago": "NOW",
+                                "description": "BB Breakout (Upside)"
+                            })
+                        elif price < latest['bb_lower']:
+                             signal_obj.update({
+                                "signal": "bearish",
+                                "time_ago": "NOW",
+                                "description": "BB Breakout (Downside)"
+                            })
+
+            # --- MACD CROSS ---
+            elif strat_type == 'macd_cross':
+                if 'macd_hist' in df.columns:
+                    recent = df.tail(50).copy()
+                    # Cross happens when Hist changes sign
+                    crosses = (recent['macd_hist'] > 0) != (recent['macd_hist'].shift(1) > 0)
+                    crosses = crosses.iloc[1:]
+                    cross_indices = crosses[crosses].index
+                    
+                    signal_obj["value"] = round(latest.get('macd_line', 0), 2)
+                    
+                    if len(cross_indices) > 0:
+                        last_cross_time = cross_indices[-1]
+                        is_bullish = recent.loc[last_cross_time, 'macd_hist'] > 0
+                        direction = "bullish" if is_bullish else "bearish"
+                        time_str = IndicatorCalculator._format_time_ago(df.index[-1] - last_cross_time)
+                        
+                        signal_obj.update({
+                            "signal": direction,
+                            "time_ago": time_str,
+                            "description": f"MACD {direction.capitalize()} Cross"
+                        })
+
+            # --- PRICE ACTION (VWAP Pullback) ---
+            elif strat_type == 'price_action':
+                if 'vwap' in df.columns:
+                    price = latest['close']
+                    vwap = latest['vwap']
+                    trend = IndicatorCalculator.calculate_trend_direction(df)
+                    
+                    # Logic: In Uptrend, Price touches VWAP from above?
+                    # approximated by price being close to VWAP within 0.5%
+                    dist_pct = abs((price - vwap) / vwap) * 100
+                    
+                    if dist_pct < 0.5:
+                        if trend == 'up' and price > vwap:
+                             signal_obj.update({
+                                "signal": "bullish",
+                                "time_ago": "NOW",
+                                "description": "VWAP Pullback (Uptrend)"
+                            })
+                        elif trend == 'down' and price < vwap:
+                             signal_obj.update({
+                                "signal": "bearish",
+                                "time_ago": "NOW",
+                                "description": "VWAP Reject (Downtrend)"
+                            })
+
+            results[strat_key] = signal_obj
+            
+        return results
+
+    @staticmethod
+    def _format_time_ago(time_diff):
+        minutes = int(time_diff.total_seconds() / 60)
+        if minutes < 60:
+            return f"{minutes} min ago"
+        elif minutes < 1440:
+            return f"{int(minutes/60)} hrs ago"
+        else:
+            return f"{int(minutes/1440)} days ago"

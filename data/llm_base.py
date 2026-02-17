@@ -55,12 +55,12 @@ class BaseLLMService(ABC):
         """
         pass
     
-    def get_system_prompt(self) -> str:
+    def get_system_prompt(self, strategy_context: Optional[str] = None) -> str:
         """
         Get the system prompt for trading analysis.
         Can be overridden by subclasses for provider-specific prompts.
         """
-        return (
+        base_prompt = (
             "You are an expert Crypto Trading Mentor and Algorithmic Architect. Your goal is to analyze "
             "market data and generate safe, logical trading strategies for a user.\n\n"
             "### YOUR INPUTS:\n"
@@ -95,7 +95,14 @@ class BaseLLMService(ABC):
             "    \"scaling_targets\": [66000, 68000]\n"
             "  }\n"
             "}\n"
+            "  }\n"
+            "}\n"
         )
+        
+        if strategy_context:
+            base_prompt += f"\n\n{strategy_context}"
+            
+        return base_prompt
     
     def extract_json(self, text: str) -> Optional[Dict[str, Any]]:
         """

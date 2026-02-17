@@ -1,18 +1,17 @@
 {
-    "balance_usd": 813.9601103137052,
+    "balance_usd": 1111.9866776066688,
     "positions": {
         "BTCUSDT": {
-            "amount": 0.002913152255263142,
-            "avg_price": 69848.73503689215,
-            "highest_price": 69947.75,
-            "lowest_price": 69750.0,
-            "stop_loss": 68200.0,
-            "take_profit": 73500.0,
-            "trailing_stop_percent": 2.0,
+            "amount": -0.001493867297177479,
+            "avg_price": 67670.0,
+            "highest_price": 67670.0,
+            "lowest_price": 67553.99,
+            "stop_loss": 67850.0,
+            "take_profit": 67100.0,
+            "trailing_stop_percent": 0.5,
             "scaling_targets": [
-                71500.0,
-                72500.0,
-                73500.0
+                67400.0,
+                67200.0
             ]
         },
         "ETHUSDT": {
@@ -27,9 +26,29 @@
         },
         "SOLUSDT": {
             "amount": 0.0,
-            "avg_price": 98.5,
-            "highest_price": 101.36,
-            "lowest_price": 98.5,
+            "avg_price": 85.22,
+            "highest_price": 85.36,
+            "lowest_price": 85.22,
+            "stop_loss": null,
+            "take_profit": null,
+            "trailing_stop_percent": null,
+            "scaling_targets": []
+        },
+        "ADAUSDT": {
+            "amount": 0.0,
+            "avg_price": 0.28,
+            "highest_price": 0.28,
+            "lowest_price": 0.28,
+            "stop_loss": null,
+            "take_profit": null,
+            "trailing_stop_percent": null,
+            "scaling_targets": []
+        },
+        "BNBUSDT": {
+            "amount": 0.0,
+            "avg_price": 618.25,
+            "highest_price": 618.25,
+            "lowest_price": 617.88,
             "stop_loss": null,
             "take_profit": null,
             "trailing_stop_percent": null,
@@ -180,6 +199,86 @@
             "price": 69947.75,
             "amount": 0.00145451,
             "total_usd": 101.74
+        },
+        {
+            "time": "2026-02-18 02:45:50",
+            "pair": "BTCUSDT",
+            "type": "SELL",
+            "price": 67879.18,
+            "amount": 0.00291315,
+            "total_usd": 197.74
+        },
+        {
+            "time": "2026-02-18 03:01:58",
+            "pair": "BTCUSDT",
+            "type": "SELL",
+            "price": 67600.0,
+            "amount": 0.0014966,
+            "total_usd": 101.17
+        },
+        {
+            "time": "2026-02-18 03:23:27",
+            "pair": "ADAUSDT",
+            "type": "SELL",
+            "price": 0.28,
+            "amount": 397.46428571,
+            "total_usd": 111.29
+        },
+        {
+            "time": "2026-02-18 03:26:18",
+            "pair": "BNBUSDT",
+            "type": "SELL",
+            "price": 618.25,
+            "amount": 0.19801051,
+            "total_usd": 122.42
+        },
+        {
+            "time": "2026-02-18 03:28:50",
+            "pair": "SOLUSDT",
+            "type": "BUY",
+            "price": 85.22,
+            "amount": 1.58014551,
+            "total_usd": 134.66
+        },
+        {
+            "time": "2026-02-18 03:52:23",
+            "pair": "SOLUSDT",
+            "type": "SELL",
+            "price": 85.29,
+            "amount": 1.58014551,
+            "total_usd": 134.77
+        },
+        {
+            "time": "2026-02-18 03:53:20",
+            "pair": "BTCUSDT",
+            "type": "BUY",
+            "price": 67604.35,
+            "amount": 0.0014966,
+            "total_usd": 101.18
+        },
+        {
+            "time": "2026-02-18 03:53:29",
+            "pair": "ADAUSDT",
+            "type": "BUY",
+            "price": 0.2821,
+            "amount": 397.46428571,
+            "total_usd": 112.12
+        },
+        {
+            "time": "2026-02-18 03:53:34",
+            "pair": "BNBUSDT",
+            "type": "BUY",
+            "price": 618.63,
+            "amount": 0.19801051,
+            "total_usd": 122.5
+        },
+        {
+            "time": "2026-02-18 03:54:08",
+            "pair": "BTCUSDT",
+            "type": "SELL",
+            "price": 67670.0,
+            "amount": 0.00149387,
+            "total_usd": 101.09
         }
     ],
     "initial_balance": 953.0427923883577

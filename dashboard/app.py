@@ -320,27 +320,63 @@ def create_main_chart(df, symbol):
         )
     
     # EMAs
-    if 'ema_50' in df.columns:
-        fig.add_trace(
-            go.Scatter(
-                x=df.index, y=df['ema_50'],
-                mode='lines', name='EMA 50',
-                line=dict(color='cyan', width=1),
-                hovertemplate='EMA 50: $%{y:,.2f}<extra></extra>'
-            ),
-            row=1, col=1
-        )
+    plotted_emas = set()
+
+    # Dynamic Strategy EMAs
+    if hasattr(config, 'STRATEGIES'):
+        for strat_name, strat_config in config.STRATEGIES.items():
+            if strat_config.get('type') == 'ema_cross':
+                # Fast EMA
+                fast = strat_config.get('fast')
+                col_fast = f"ema_{fast}"
+                if fast and col_fast in df.columns and fast not in plotted_emas:
+                    color = strat_config.get('color_fast', '#ffff00')
+                    fig.add_trace(
+                        go.Scatter(
+                            x=df.index, y=df[col_fast],
+                            mode='lines', name=f'EMA {fast}',
+                            line=dict(color=color, width=1),
+                            hovertemplate=f'EMA {fast}: $%{{y:,.2f}}<extra></extra>'
+                        ),
+                        row=1, col=1
+                    )
+                    plotted_emas.add(fast)
+
+                # Slow EMA
+                slow = strat_config.get('slow')
+                col_slow = f"ema_{slow}"
+                if slow and col_slow in df.columns and slow not in plotted_emas:
+                    color = strat_config.get('color_slow', '#ffa500')
+                    fig.add_trace(
+                        go.Scatter(
+                            x=df.index, y=df[col_slow],
+                            mode='lines', name=f'EMA {slow}',
+                            line=dict(color=color, width=1),
+                            hovertemplate=f'EMA {slow}: $%{{y:,.2f}}<extra></extra>'
+                        ),
+                        row=1, col=1
+                    )
+                    plotted_emas.add(slow)
+
+    # Standard EMAs (if not already plotted)
+    std_emas = [
+        (config.INDICATORS['ema_short'], 'cyan'), 
+        (config.INDICATORS['ema_long'], 'magenta')
+    ]
     
-    if 'ema_200' in df.columns:
-        fig.add_trace(
-            go.Scatter(
-                x=df.index, y=df['ema_200'],
-                mode='lines', name='EMA 200',
-                line=dict(color='magenta', width=1),
-                hovertemplate='EMA 200: $%{y:,.2f}<extra></extra>'
-            ),
-            row=1, col=1
-        )
+    for period, color in std_emas:
+        col = f"ema_{period}"
+        if period not in plotted_emas and col in df.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=df.index, y=df[col],
+                    mode='lines', name=f'EMA {period}',
+                    line=dict(color=color, width=1),
+                    hovertemplate=f'EMA {period}: $%{{y:,.2f}}<extra></extra>'
+                ),
+                row=1, col=1
+            )
+            plotted_emas.add(period)
     
     # Bollinger Bands
     if 'bb_upper' in df.columns:
@@ -763,7 +799,7 @@ def render_strategy_card(strategy_json, unique_id="0"):
     name = strategy_json.get('strategy_name', 'Untitled Strategy')
     action = strategy_json.get('action', 'WAIT')
     rationale = strategy_json.get('rationale', '')
-    params = strategy_json.get('trade_params', {})
+    params = strategy_json.get('trade_params') or {}
     
     # Extract defaults
     wallet = st.session_state.wallet

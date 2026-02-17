@@ -7,32 +7,108 @@ import json
 from data.ai_bridge import AIBridge
 
 
+from data.strategy_router import StrategyRouter
+from data.trade_state_manager import TradeStateManager
+
+def render_active_trade_card(active_trade, current_price):
+    """
+    Renders the Active Position Card
+    """
+    if not active_trade:
+        return
+
+    st.markdown("### 🛡️ Active Position Monitor")
+    
+    # Calculate PnL
+    entry = active_trade['entry_price']
+    side = active_trade['side']
+    
+    if side == "BUY":
+        pnl_pct = ((current_price - entry) / entry) * 100
+    else:
+        pnl_pct = ((entry - current_price) / entry) * 100
+        
+    pnl_color = "green" if pnl_pct >= 0 else "red"
+    
+    # Card Container
+    with st.container():
+        st.info(f"**STRATEGY ACTIVE:** {active_trade.get('strategy_id', 'Unknown')} ({side})")
+        
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Entry Price", f"${entry:,.2f}")
+        c2.metric("Current Price", f"${current_price:,.2f}")
+        c3.metric("PnL %", f"{pnl_pct:+.2f}%", delta=f"{pnl_pct:+.2f}%")
+        c4.metric("Stop Loss", f"${active_trade.get('stop_loss', 0):,.2f}")
+        
+        # Management Actions
+        ac1, ac2 = st.columns(2)
+        if ac1.button("🛑 Close Trade Now", key="btn_close_trade"):
+            TradeStateManager.close_trade(current_price, reason="Manual Dashboard Close")
+            st.success("Trade Closed!")
+            st.rerun()
+            
+        if ac2.button("🔧 Tighten Stop Loss (Trailing)", key="btn_update_sl"):
+            # Simple simulation: Move SL to Break Even or 1% below current
+            # This is a placeholder for more complex logic
+            new_sl = entry * 1.001 if side == "BUY" else entry * 0.999
+            TradeStateManager.update_stop_loss(new_sl, reason="Manual Tighten")
+            st.toast("Stop Loss Updated to Break Even!", icon="🛡️")
+            st.rerun()
+
+
+def render_strategy_signals(df):
+    """
+    Renders the Strategy Signal Panel (Compact View)
+    """
+    st.markdown("### 📡 Strategy Signals")
+    
+    status_list = StrategyRouter.get_strategy_status_for_ui(df)
+    
+    if not status_list:
+        st.info("No sufficient data for strategy signals.")
+        return
+
+    # Create a nice summary dataframe
+    summary_data = []
+    for item in status_list:
+        sig = item['signal']
+        icon = "🟢" if sig == "bullish" else "🔴" if sig == "bearish" else "⚪"
+        summary_data.append({
+            "Strategy": item['name'],
+            "Signal": f"{icon} {sig.upper()}",
+            "Time Ago": item['time_ago'],
+            "Description": item['description']
+        })
+        
+    st.dataframe(
+        summary_data, 
+        use_container_width=True, 
+        hide_index=True,
+        column_config={
+            "Strategy": st.column_config.TextColumn("Strategy", width="medium"),
+            "Signal": st.column_config.TextColumn("Signal", width="small"),
+            "Time Ago": st.column_config.TextColumn("Time", width="small"),
+            "Description": st.column_config.TextColumn("Condition", width="large"),
+        }
+    )
+
 def render_market_context_card(payload):
     """
-    Display the market context being sent to LLMs
+    Display the market context (Compact)
     """
     if not payload:
-        st.warning("No market data available")
         return
     
-    st.markdown("### 📊 Current Market Context")
-    st.caption("This data is being sent to all AI advisors")
+    st.markdown("### 📊 Market Regime")
+    metrics = payload.get("metrics", {})
     
-    with st.expander("View Market Data JSON", expanded=False):
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Regime", metrics.get("volatility_type", "N/A"))
+    c2.metric("Trend", metrics.get("trend", "N/A"))
+    c3.metric("ADX", metrics.get("adx", "N/A"))
+    
+    with st.expander("View Full Context JSON"):
         st.json(payload)
-    
-    # Quick summary
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Pair", payload.get("pair", "N/A"))
-    with col2:
-        st.metric("Price", f"${payload.get('price', 0):,.2f}")
-    with col3:
-        metrics = payload.get("metrics", {})
-        st.metric("RSI", metrics.get("RSI", "N/A"))
-    with col4:
-        st.metric("Trend", metrics.get("trend", "N/A"))
-
 
 def render_llm_column(llm_name, history_key, unique_key, orchestrator, market_payload):
     """
@@ -108,10 +184,13 @@ def render_ai_advisory_tab(df, symbol, collector):
     """
     Main AI Advisory tab - queries multiple LLMs in parallel
     """
-    st.markdown("## 🤖 Multi-LLM Advisory System")
-    st.caption("Get diverse perspectives from multiple AI models on the same market data")
+    st.markdown("## 🤖 AI Advisory")
     
     # Get orchestrator
+    if 'llm_orchestrator' not in st.session_state:
+         st.error("LLM Orchestrator not initialized")
+         return
+         
     orchestrator = st.session_state.llm_orchestrator
     
     # Get market payload
@@ -121,89 +200,90 @@ def render_ai_advisory_tab(df, symbol, collector):
         st.error("Unable to generate market data payload")
         return
     
-    # Show market context
-    render_market_context_card(payload)
+    # 🟢 ACTIVE TRADE CHECK - Full Width Banner
+    active_trade = TradeStateManager.get_active_trade()
+    if active_trade:
+        current_price = df.iloc[-1]['close']
+        render_active_trade_card(active_trade, current_price)
+        st.markdown("---")
+
+    # 🧠 DYNAMIC INJECTION
+    strategy_context = StrategyRouter.get_strategy_context(df)
+    payload["_strategy_context_text"] = strategy_context
     
+    # Layout: Split Market Context & Signals
+    col_left, col_right = st.columns([1, 2])
+    
+    with col_left:
+        # Market Context
+        render_market_context_card(payload)
+        
+    with col_right:
+        # Signals Table
+        render_strategy_signals(df)
+        
+        # Dev Tools (Compact)
+        with st.expander("🛠️ Dev Tools"):
+            if st.button("Simulate Long Trade"):
+                current_p = df.iloc[-1]['close']
+                TradeStateManager.start_trade("9_20_EMA", "BTC/USDT", "BUY", current_p, current_p*0.98, current_p*1.05)
+                st.rerun()
+
     st.markdown("---")
     
-    # Check which providers are configured
+    # Check Providers
     configured = orchestrator.get_configured_providers()
     
     if not configured:
-        st.warning("⚠️ No AI providers are configured. Please add API keys to your `.env` file:")
-        st.code("""
-# Add to .env file:
-CLAUDE_API_KEY=your_claude_key_here
-GEMINI_API_KEY=your_gemini_key_here
-GROK_API_KEY=your_grok_key_here  # Optional
-        """)
+        st.warning("⚠️ No AI providers configured. Check .env file.")
         return
     
-    st.success(f"✅ Configured providers: {', '.join(configured)}")
-    
     # "Ask All Advisors" button
-    col_btn1, col_btn2, col_spacer = st.columns([2, 2, 6])
-    
-    with col_btn1:
-        if st.button("🚀 Ask All Advisors", type="primary", use_container_width=True):
+    if st.button("🚀 Ask All Advisors", type="primary", use_container_width=True):
             with st.spinner("Querying all advisors in parallel..."):
-                # Query all configured LLMs
                 results = orchestrator.query_all(
                     market_payload=payload,
                     chat_histories={
                         "Claude": st.session_state.claude_history,
-                        "Gemini": st.session_state.gemini_advisory_history,
-                        "Grok": st.session_state.grok_history
+                        "Gemini": st.session_state.gemini_advisory_history
                     },
-                    user_message=None,  # No specific question, just analyze
+                    user_message=None,
                     enabled_providers=configured
                 )
                 
-                # Add responses to histories
+                # Add responses
                 for provider, result in results.items():
                     if provider == "Claude":
-                        history_key = "claude_history"
+                        target_history = st.session_state.claude_history
                     elif provider == "Gemini":
-                        history_key = "gemini_advisory_history"
-                    elif provider == "Grok":
-                        history_key = "grok_history"
+                        target_history = st.session_state.gemini_advisory_history
                     else:
                         continue
-                    
+                        
                     if result["success"]:
-                        st.session_state[history_key].append({
-                            "role": "assistant",
-                            "content": result["response"]
-                        })
-                        st.toast(f"✅ {provider} responded in {result['response_time']:.1f}s", icon="🎯")
+                        target_history.append({"role": "assistant", "content": result["response"]})
+                        st.toast(f"✅ {provider} responded", icon="🎯")
                     else:
                         error_msg = result.get("error", "Unknown error")
-                        st.session_state[history_key].append({
-                            "role": "assistant",
-                            "content": f"❌ Error: {error_msg}"
-                        })
+                        target_history.append({"role": "assistant", "content": f"❌ Error: {error_msg}"})
                 
                 st.rerun()
-    
-    with col_btn2:
-        if st.button("🗑️ Clear All Histories", use_container_width=True):
-            st.session_state.claude_history = []
-            st.session_state.gemini_advisory_history = []
-            st.session_state.grok_history = []
-            st.rerun()
+
+    # Clear History Button
+    if st.button("🗑️ Clear All Histories"):
+        st.session_state.claude_history = []
+        st.session_state.gemini_advisory_history = []
+        st.rerun()
     
     st.markdown("---")
     
-    # Three-column layout for LLM responses
+    # Two-column layout for LLM responses
     st.markdown("### 💬 Individual Advisors")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     
     with col1:
-        render_llm_column("Claude", "claude_history", "claude", orchestrator, payload)
-    
+        render_llm_column("Claude", "claude_history", "claude_adv", orchestrator, payload)
+        
     with col2:
         render_llm_column("Gemini", "gemini_advisory_history", "gemini_adv", orchestrator, payload)
-    
-    with col3:
-        render_llm_column("Grok", "grok_history", "grok", orchestrator, payload)

@@ -38,7 +38,92 @@ INDICATORS = {
     "adx_period": 14,
     "volume_ma_period": 20,
     "bollinger_period": 20,
-    "bollinger_std": 2
+    "bollinger_std": 2,
+    "macd_fast": 12,
+    "macd_slow": 26,
+    "macd_signal": 9
+}
+
+# Strategy Configurations (The "Library")
+STRATEGIES = {
+    "8_30_EMA": {
+        "id": "strat_8_30",
+        "name": "8-30 EMA Trend Ride",
+        "type": "ema_cross",
+        "fast": 8,
+        "slow": 30,
+        "color_fast": "#ffff00",  # Yellow
+        "color_slow": "#ffa500",  # Orange
+        "logic": "Buy when 8 EMA crosses above 30 EMA. Sell when it crosses below.",
+        "risk_profile": "Conservative (Trend Following)",
+        "ideal_regime": "trending",
+        "description": "Trend-following with 8 (fast) and 30 (slow) EMA"
+    },
+    "9_20_EMA": {
+        "id": "strat_9_20",
+        "name": "9-20 Momentum Scalp",
+        "type": "ema_cross",
+        "fast": 9,
+        "slow": 20,
+        "color_fast": "#00ffff",  # Cyan
+        "color_slow": "#0000ff",  # Blue
+        "logic": "Buy when 9 EMA crosses above 20 EMA. Sell when it crosses below.",
+        "risk_profile": "Aggressive (High frequency)",
+        "ideal_regime": "volatile",
+        "description": "Scalping strategy with 9 (fast) and 20 (slow) EMA"
+    },
+    "RSI_MEAN_REVERSION": {
+        "id": "strat_rsi_rev",
+        "name": "RSI Mean Reversion",
+        "type": "oscillator",
+        "buy_threshold": 30,
+        "sell_threshold": 70,
+        "logic": "Buy when RSI < 30 (Oversold). Sell when RSI > 70 (Overbought).",
+        "risk_profile": "Moderate (Counter-trend)",
+        "ideal_regime": "ranging",
+        "description": "Classic buy low, sell high using RSI extremes"
+    },
+    "BB_BREAKOUT": {
+        "id": "strat_bb_break",
+        "name": "Bollinger Band Breakout",
+        "type": "volatility_breakout",
+        "squeeze_threshold": 0.05, # Bandwidth
+        "logic": "Buy when price closes above Upper Band after a Squeeze. Sell if closes below Lower Band.",
+        "risk_profile": "Aggressive (Volatile Expansion)",
+        "ideal_regime": "volatile",
+        "description": "Catching explosive moves after low volatility squeezes"
+    },
+    "MACD_REVERSAL": {
+        "id": "strat_macd_rev",
+        "name": "MACD Trend Reversal",
+        "type": "macd_cross",
+        "logic": "Buy when MACD Hist turns green (Bullish Cross) below zero line. Sell when turns red above zero.",
+        "risk_profile": "Moderate (Momentum Reversal)",
+        "ideal_regime": "reversal",
+        "description": "Early trend reversal detection using MACD Momentum"
+    },
+    "GOLDEN_CROSS": {
+        "id": "strat_golden_cross",
+        "name": "Golden Cross (50/200)",
+        "type": "ema_cross",
+        "fast": 50,
+        "slow": 200,
+        "color_fast": "#FFD700", # Gold
+        "color_slow": "#FFFFFF", # White
+        "logic": "Buy when 50 EMA crosses above 200 EMA. Sell when it crosses below (Death Cross).",
+        "risk_profile": "Conservative (Long Term)",
+        "ideal_regime": "trending",
+        "description": "Major long-term market regime shift indicator"
+    },
+    "VWAP_PULLBACK": {
+        "id": "strat_vwap",
+        "name": "VWAP Pullback",
+        "type": "price_action",
+        "logic": "Buy when price is in uptrend but touches VWAP from above. Sell when price touches VWAP from below in downtrend.",
+        "risk_profile": "Low (Trend Continuation)",
+        "ideal_regime": "trending",
+        "description": "Institutional entry points at fair value during trends"
+    }
 }
 
 # Market Regime Thresholds

@@ -105,8 +105,11 @@ class GeminiLLMService(BaseLLMService):
             }
         
         try:
+            # Extract strategy context if present in payload (metadata)
+            strategy_context = market_payload.pop('_strategy_context_text', None)
+            
             # Build message context
-            system_prompt = self.get_system_prompt()
+            system_prompt = self.get_system_prompt(strategy_context)
             market_context = self.format_market_context(market_payload)
             
             # Format chat history

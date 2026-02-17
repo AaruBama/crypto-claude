@@ -1,0 +1,41 @@
+{
+  "active_trade": null,
+  "history": [
+    {
+      "status": "CLOSED",
+      "strategy_id": "9_20_EMA",
+      "symbol": "BTC/USDT",
+      "side": "BUY",
+      "entry_price": 67553.99,
+      "start_time": "2026-02-17T22:54:16.836657",
+      "stop_loss": 66202.9102,
+      "take_profit": 70931.68950000001,
+      "highest_price": 67553.99,
+      "updates": [],
+      "exit_price": 67558.0,
+      "end_time": [
+        "2026-02-17T22:56:15.478199"
+      ],
+      "close_reason": "Manual Dashboard Close",
+      "final_pnl_pct": 0.01
+    },
+    {
+      "status": "CLOSED",
+      "strategy_id": "9_20_EMA",
+      "symbol": "BTC/USDT",
+      "side": "BUY",
+      "entry_price": 67595.88,
+      "start_time": "2026-02-17T22:18:28.108184",
+      "stop_loss": 66243.9624,
+      "take_profit": 70975.67400000001,
+      "highest_price": 67595.88,
+      "updates": [],
+      "exit_price": 67646.2,
+      "end_time": [
+        "2026-02-17T22:21:15.712359"
+      ],
+      "close_reason": "Manual Dashboard Close",
+      "final_pnl_pct": 0.07
+    }
+  ]
+}
