@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import pandas_ta as ta
 import vectorbt as vbt
-from trading_engine.config import STRATEGIES, LIVE_ALLOCATION
+from trading_engine.config import STRATEGIES, LIVE_ALLOCATION, ENABLE_MEAN_REVERSION
 
 def run_multi_asset_backtest():
     print("🚀 Loading Multi-Asset 5m data (365 Days)...")
@@ -134,12 +134,17 @@ def run_multi_asset_backtest():
                    (z_score > cfg.get('z_score_threshold', 3.0)) & 
                    (rvol > cfg.get('rvol_threshold', 3.0)) & ranging_mask)
         
-        # ── KEY CHANGE #3: BTC long-only MR, SOL requires engulfing ──
-        if sym == 'BTC':
+        # ── MR gated by config flag ──
+        if not ENABLE_MEAN_REVERSION:
+            mr_buy  = pd.Series(False, index=close.index)
             mr_sell = pd.Series(False, index=close.index)
-        elif sym == 'SOL':
-            mr_buy  = mr_buy & bullish_engulfing
-            mr_sell = mr_sell & bearish_engulfing
+        else:
+            # BTC long-only MR, SOL requires engulfing
+            if sym == 'BTC':
+                mr_sell = pd.Series(False, index=close.index)
+            elif sym == 'SOL':
+                mr_buy  = mr_buy & bullish_engulfing
+                mr_sell = mr_sell & bearish_engulfing
         
         mr1_entries[sym] = mr_buy.fillna(False)
         mr1_shorts[sym]  = mr_sell.fillna(False)
@@ -162,9 +167,14 @@ def run_multi_asset_backtest():
         trend_entries[sym] = trend_buy.fillna(False)
         trend_shorts[sym]  = trend_sell.fillna(False)
         
-        # Trend: 30% partial TP, 70% trailing
-        trend_size_tp[sym]    = pd.Series(budget * 0.3, index=close.index)
-        trend_size_trail[sym] = pd.Series(budget * 0.7, index=close.index)
+        # Trend: allocate more budget if MR is disabled
+        if ENABLE_MEAN_REVERSION:
+            trend_size_tp[sym]    = pd.Series(budget * 0.3, index=close.index)
+            trend_size_trail[sym] = pd.Series(budget * 0.7, index=close.index)
+        else:
+            # Pure momentum: full budget to trend
+            trend_size_tp[sym]    = pd.Series(budget * 0.4, index=close.index)
+            trend_size_trail[sym] = pd.Series(budget * 0.6, index=close.index)
         
         # Stops
         sl_mr1[sym] = (atr * cfg.get('sl_atr_mult', 1.5) / c_close).fillna(0.015)
@@ -319,7 +329,59 @@ def run_multi_asset_backtest():
     print(f"CAGR:                   {cagr:.2f}%")
     print(f"Calmar Ratio:           {calmar:.2f}")
     print(f"Proxy Sharpe Ratio:     {ann_sharpe:.2f}")
+    
+    # Avg hold time estimate (from equity curve shape — proxy using trade duration)
+    total_bars = len(close)
+    avg_bars_per_trade = total_bars / total_trades if total_trades > 0 else 0
+    avg_hold_hours = avg_bars_per_trade * 0.25  # 15min = 0.25h
+    print(f"Avg Hold Time (est.):   {avg_hold_hours:.1f} hours ({avg_hold_hours/24:.1f} days)")
+    
+    # Monthly Returns Table
+    print("\n--- Monthly Returns ---")
+    monthly_eq = total_equity_curve.resample('ME').last()
+    monthly_returns = monthly_eq.pct_change().dropna() * 100
+    monthly_data = []
+    print(f"{'Month':<12} {'Return':>8} {'Equity':>10}")
+    print("-" * 32)
+    for date, ret in monthly_returns.items():
+        eq_val = monthly_eq.loc[date]
+        month_str = date.strftime('%Y-%m')
+        print(f"{month_str:<12} {ret:>+7.2f}% ${eq_val:>8.2f}")
+        monthly_data.append({'month': month_str, 'return_pct': round(ret, 2), 'equity': round(eq_val, 2)})
+    
     print("="*50)
+    
+    # Save results to CSV
+    os.makedirs('data/backtests', exist_ok=True)
+    results_df = pd.DataFrame([{
+        'strategy': 'V7.1 Pure Momentum' if mr_trades == 0 else 'V7.1 Mixed',
+        'initial_capital': 300.0,
+        'final_capital': round(300.0 + total_net, 2),
+        'total_pnl': round(total_net, 2),
+        'cagr_pct': round(cagr, 2),
+        'max_drawdown_pct': round(max_drawdown, 2),
+        'total_trades': int(total_trades),
+        'mr_trades': int(mr_trades),
+        'trend_trades': int(tr_trades),
+        'win_rate_pct': round(win_rate, 2),
+        'profit_factor': round(profit_factor, 2),
+        'calmar_ratio': round(calmar, 2),
+        'sharpe_proxy': round(ann_sharpe, 2),
+        'fee_drag_pct': round(fee_drag_pct, 2),
+        'avg_hold_hours': round(avg_hold_hours, 1),
+        'fees_model': f'fee={REALISTIC_FEE*100:.3f}% slip={REALISTIC_SLIPPAGE*100:.3f}%',
+        'timeframe': '15min',
+    }])
+    
+    output_path = 'data/backtests/v7_pure_momentum_final_2026.csv'
+    results_df.to_csv(output_path, index=False)
+    print(f"\n💾 Results saved to {output_path}")
 
 if __name__ == '__main__':
+    from trading_engine import config
+    
+    # Apply config flag: disable MR in backtest if flag is False
+    if not config.ENABLE_MEAN_REVERSION:
+        print("🔧 MR disabled via config.ENABLE_MEAN_REVERSION = False")
+    
     run_multi_asset_backtest()

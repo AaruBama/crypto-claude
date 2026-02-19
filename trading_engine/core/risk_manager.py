@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timedelta
+from trading_engine import config
 from trading_engine.config import RISK_SETTINGS
 
 logger = logging.getLogger("RiskManager")
@@ -12,6 +13,14 @@ class RiskManager:
         self.max_daily_loss_pct = 100.0
         self.daily_realized_pnl = 0.0
         self.lockout_until = None
+        
+        # V7.1 Momentum Streak Protection
+        self.consecutive_losses = 0
+        self.momentum_cooldown_until = None
+        
+        # V7.1 Weekly Compounding
+        self.weekly_realized_pnl = 0.0
+        self.week_start_balance = initial_balance
 
         # V4 Safety Belt 3: Budget Balance
         # Maps strategy_id → reserved USD amount.
@@ -41,6 +50,19 @@ class RiskManager:
         net_pnl = pnl_amount - exit_fee - tax
         self.daily_realized_pnl += net_pnl
         self.balance += net_pnl
+        self.weekly_realized_pnl += net_pnl
+
+        # V7.1 Momentum Streak Protection
+        if pnl_amount < 0:
+            self.consecutive_losses += 1
+            if self.consecutive_losses >= config.MOMENTUM_CONSECUTIVE_LOSS_LIMIT:
+                cooldown_hours = config.MOMENTUM_LOSS_COOLDOWN_HOURS
+                self.momentum_cooldown_until = datetime.now() + timedelta(hours=cooldown_hours)
+                logger.error(f"🚨 {self.consecutive_losses} CONSECUTIVE LOSSES: "
+                           f"Pausing momentum entries for {cooldown_hours}h.")
+                self.consecutive_losses = 0
+        else:
+            self.consecutive_losses = 0
 
         # Circuit Breaker
         loss_pct = (
@@ -69,6 +91,46 @@ class RiskManager:
             self.initial_day_balance = self.balance
             return False
         return False
+
+    def is_momentum_cooled_down(self) -> bool:
+        """Checks if momentum is paused due to consecutive losses."""
+        if self.momentum_cooldown_until and datetime.now() < self.momentum_cooldown_until:
+            remaining = (self.momentum_cooldown_until - datetime.now()).total_seconds() / 3600
+            logger.info(f"⏸️ Momentum cooldown active: {remaining:.1f}h remaining")
+            return True
+        elif self.momentum_cooldown_until:
+            self.momentum_cooldown_until = None
+            logger.info("✅ Momentum cooldown expired — entries re-enabled")
+        return False
+
+    def evaluate_weekly_compounding(self) -> float:
+        """
+        V7.1 Weekly Compounding: If weekly PnL > threshold%, 
+        increase momentum budget by fraction of weekly return.
+        Returns additional budget amount (0 if threshold not met).
+        Call at end of each week (e.g., Sunday midnight).
+        """
+        if self.week_start_balance <= 0:
+            return 0.0
+
+        weekly_pct = (self.weekly_realized_pnl / self.week_start_balance) * 100
+        threshold = config.MOMENTUM_WEEKLY_COMPOUND_THRESHOLD
+        
+        if weekly_pct > threshold:
+            reinvest = self.weekly_realized_pnl * config.MOMENTUM_COMPOUND_FRACTION
+            logger.info(f"💎 WEEKLY COMPOUNDING: +{weekly_pct:.2f}% this week. "
+                       f"Reinvesting ${reinvest:.2f} into momentum budget.")
+            # Reset weekly tracking
+            self.weekly_realized_pnl = 0.0
+            self.week_start_balance = self.balance
+            return reinvest
+        
+        return 0.0
+
+    def reset_weekly_tracking(self):
+        """Called at the start of each new week."""
+        self.weekly_realized_pnl = 0.0
+        self.week_start_balance = self.balance
 
     # ------------------------------------------------------------------
     # V4 Safety Belt 3: Budget Balance (Strategy Reservations)

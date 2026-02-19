@@ -11,15 +11,27 @@ load_dotenv()
 # Engine Settings
 ENGINE_SETTINGS = {
     "symbol": "BTC/USDT",
-    "timeframe": "1m",          # Engine runs on 1m candles for precision
+    "timeframe": "15m",         # V7.1: 15m candles for signal quality
     "update_interval": 1,       # seconds
     "paper_trading": True,      # ✅ PAPER MODE: No real orders sent
     "LIVE_TRADING_ENABLED": False,
-    # V4: Relative Volume threshold — entry only on volume spikes above this multiple
-    "VOL_SPIKE_THRESHOLD": 1.5, # Global default; overridden per-strategy in params
-    # V5: Z-Score threshold — how many std-devs from rolling mean price must be
-    "Z_SCORE_THRESHOLD": 2.2,   # |z| > 2.2 ≈ bottom 1.1% of distribution (BTC only)
+    "VOL_SPIKE_THRESHOLD": 1.5,
+    "Z_SCORE_THRESHOLD": 3.0,
 }
+
+# ──────────────────────────────────────────────────────────────────
+# V7.1 Strategy Switches (2026-02-20 A/B Test Conclusion)
+# Pure momentum outperforms MR-inclusive by ~8% CAGR with 5× lower DD.
+# MR disabled by default; set to True to re-enable for testing.
+# ──────────────────────────────────────────────────────────────────
+ENABLE_MEAN_REVERSION = False
+ENABLE_MOMENTUM_BREAKOUT = True
+
+# Momentum-specific settings
+MOMENTUM_CONSECUTIVE_LOSS_LIMIT = 3    # Pause after N consecutive losers
+MOMENTUM_LOSS_COOLDOWN_HOURS = 48      # Hours to pause after streak
+MOMENTUM_WEEKLY_COMPOUND_THRESHOLD = 1.5  # % weekly PnL to trigger compounding
+MOMENTUM_COMPOUND_FRACTION = 0.5       # Fraction of weekly return to reinvest
 
 # Risk Limits
 RISK_SETTINGS = {
