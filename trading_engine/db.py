@@ -110,9 +110,9 @@ class DatabaseHandler:
             if cursor.fetchone()[0] == 0:
                 conn.execute(
                     "INSERT INTO performance (total_balance, equity) VALUES (?, ?)",
-                    (10000.0, 10000.0)
+                    (300.0, 300.0)
                 )
-                logger.info("🌱 Seeded initial Paper Trading balance: $10,000")
+                logger.info("🌱 Seeded initial Paper Trading balance: $300")
                 
             conn.commit()
             logger.info("✅ Database initialized with WAL mode.")

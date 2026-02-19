@@ -15,7 +15,7 @@ class Exchange:
     def __init__(self, paper_mode=True, risk_manager=None):
         self.paper = paper_mode
         self.live_enabled = ENGINE_SETTINGS.get("LIVE_TRADING_ENABLED", False)
-        self.balance = 10000.0 if paper_mode else 0.0
+        self.balance = 300.0 if paper_mode else 0.0
         self.risk_manager = risk_manager
         self.pending_orders = []  # List of dicts: {id, symbol, side, qty, price, type, timestamp, expiry}
         self.active_positions = [] # List of dicts: {trade_id, symbol, side, qty, entry_price, sl, tp, strategy_id, signal_id}

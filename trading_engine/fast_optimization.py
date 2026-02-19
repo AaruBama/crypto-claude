@@ -61,6 +61,14 @@ def run_fast_optimization(m5_path, z_scores, rvols, adx_thresholds, tp_multiplie
     # ATR
     atr = df.ta.atr(length=atr_period)
     
+    # Trend Base EMA Filter (Macro Trend)
+    ema_200 = df.ta.ema(length=200)
+    
+    # Chaos filtering
+    atr_pct = atr / close
+    chaos_threshold = atr_pct.quantile(0.95)
+    chaos_mask = atr_pct >= chaos_threshold
+    
     print("⚡ Vectorizing parameter combinations...")
     
     # Build a multi-index of all combinations
@@ -74,76 +82,88 @@ def run_fast_optimization(m5_path, z_scores, rvols, adx_thresholds, tp_multiplie
     rsi_lower_val = 30
     rsi_upper_val = 70
     
-    sl_stop_base = (atr * 1.5 / close).fillna(0.015).values
+    sl_stop_mr_base = (atr * 1.5 / close).fillna(0.015).values
     tp_mid = curr_pct_tp(close, bb_mid).values
     
     # Iterate through parameters (this is still faster than pure python backtesting)
     for i, (z, r, adx_thresh, tp_mult) in enumerate(combinations):
         
-        # ── BUY CONDITIONS ──
-        buy_cond = (
-            (close <= bb_lower) & 
-            (rsi < rsi_lower_val) & 
-            (z_score < -z) & 
-            (rvol > r) & 
-            (adx <= adx_thresh)
-        )
+        # ── REGIME ROUTING ──
+        ranging_mask = (adx <= adx_thresh) & (~chaos_mask)
+        trending_mask = (adx > adx_thresh) & (~chaos_mask)
         
-        # ── SELL CONDITIONS ──
-        sell_cond = (
-            (close >= bb_upper) & 
-            (rsi > rsi_upper_val) & 
-            (z_score > z) & 
-            (rvol > r) & 
-            (adx <= adx_thresh)
-        )
+        # ── 1. RANGING MODE: Mean Reversion ──
+        mr_buy = (close <= bb_lower) & (rsi < rsi_lower_val) & (z_score < -z) & (rvol > r) & ranging_mask
+        mr_sell = (close >= bb_upper) & (rsi > rsi_upper_val) & (z_score > z) & (rvol > r) & ranging_mask
         
-        entries = buy_cond.fillna(False)
-        short_entries = sell_cond.fillna(False)
+        mr_entries = mr_buy.fillna(False)
+        mr_shorts = mr_sell.fillna(False)
         
-        # ── 2-TIER EXIT SIMULATION ──
-        # Tier 1: 50% exits at bb_mid, standard 1.5 ATR SL
-        pf1 = vbt.Portfolio.from_signals(
+        # Tier 1 MR: 50% exits at bb_mid, standard 1.5 ATR SL
+        pf_mr1 = vbt.Portfolio.from_signals(
             close,
-            entries=entries,
-            short_entries=short_entries,
-            sl_stop=sl_stop_base,
+            entries=mr_entries,
+            short_entries=mr_shorts,
+            sl_stop=sl_stop_mr_base,
             tp_stop=tp_mid,
-            fees=0.0002,  # Conservative Maker Fee (0.02%)
+            fees=0.0002,
             freq='5T',
             init_cash=150.0,
-            size=75.0, # 50% of trade budget
+            size=75.0, # 50%
             size_type='value'
         )
         
-        # Tier 2: 50% exits with Trailing Stop or Opposite BB
-        # We model the trailing stop via vbt sl_trail=True
-        # Set TP to a very large number so trailing stop usually hits, OR approximate opposite BB
-        trail_stop_pct = (atr * tp_mult / close).fillna(0.015).values
-        pf2 = vbt.Portfolio.from_signals(
+        # Tier 2 MR: 50% trails with User Defined tp_mult
+        trail_pct_mr = (atr * tp_mult / close).fillna(0.015).values
+        pf_mr2 = vbt.Portfolio.from_signals(
             close,
-            entries=entries,
-            short_entries=short_entries,
-            sl_stop=trail_stop_pct,
+            entries=mr_entries,
+            short_entries=mr_shorts,
+            sl_stop=trail_pct_mr,
             sl_trail=True,
-            # We can use opposite BB as static TP for runner
-            # Since tp_stop in vbt from_signals applies equally to long/short entries as a % distance:
-            # For simplicity of runner, we let the trailing stop do the work.
-            tp_stop=0.10, # 10% hard cap
-            fees=0.0002,  # Conservative Maker Fee (0.02%)
+            tp_stop=0.10, # hard cap 10%
+            fees=0.0002,
             freq='5T',
             init_cash=150.0,
-            size=75.0, # other 50%
+            size=75.0, # 50%
             size_type='value'
         )
         
-        total_pnl = pf1.total_profit() + pf2.total_profit()
-        t1_len = len(pf1.trades)
-        t2_len = len(pf2.trades)
+        # ── 2. TRENDING MODE: Momentum Breakout ──
+        # Structural macro-trend filter prevents 5m chop whipsaws
+        trend_buy = (close > bb_upper) & (~adx_falling) & trending_mask & (close > ema_200)
+        trend_sell = (close < bb_lower) & (~adx_falling) & trending_mask & (close < ema_200)
         
-        if t1_len + t2_len > 0:
-            # Weighted win rate approximation
-            win_rate = ((pf1.trades.win_rate() * t1_len) + (pf2.trades.win_rate() * t2_len)) / (t1_len + t2_len) * 100
+        trend_entries = trend_buy.fillna(False)
+        trend_shorts = trend_sell.fillna(False)
+        
+        # Trend Portfolio: Fat Tail Trailing Stop
+        # 3.0 ATR on a 5m chart is too small to capture "10% moves", so we scale it 
+        # (10x 5m ATR roughly approximates a 4H 2.5 ATR)
+        trend_sl_pct = (atr * 10.0 / close).fillna(0.04).values
+        pf_trend = vbt.Portfolio.from_signals(
+            close,
+            entries=trend_entries,
+            short_entries=trend_shorts,
+            sl_stop=trend_sl_pct,
+            sl_trail=True,
+            tp_stop=1.0, # Never hit TP, let trail exit
+            fees=0.0002,
+            freq='5T',
+            init_cash=150.0,
+            size=150.0, # 100% allocation for Trend Module
+            size_type='value'
+        )
+        
+        total_pnl = pf_mr1.total_profit() + pf_mr2.total_profit() + pf_trend.total_profit()
+        t1_len = len(pf_mr1.trades)
+        t2_len = len(pf_mr2.trades)
+        tr_len = len(pf_trend.trades)
+        total_trades = t1_len + t2_len + tr_len
+        
+        if total_trades > 0:
+            win_wgts = (pf_mr1.trades.win_rate() * t1_len) + (pf_mr2.trades.win_rate() * t2_len) + (pf_trend.trades.win_rate() * tr_len)
+            win_rate = win_wgts / total_trades * 100
         else:
             win_rate = 0.0
             
@@ -154,7 +174,7 @@ def run_fast_optimization(m5_path, z_scores, rvols, adx_thresholds, tp_multiplie
             'tp_multiplier': tp_mult,
             'final_pnl': total_pnl,
             'win_rate': float(win_rate),
-            'total_trades': t1_len
+            'total_trades': total_trades
         })
         
         if (i+1) % 10 == 0:

@@ -15,7 +15,7 @@ from trading_engine.core.exchange import Exchange
 from trading_engine.core.risk_manager import RiskManager
 from trading_engine.core.candle_manager import CandleManager
 from trading_engine.db import DatabaseHandler
-from trading_engine.strategies.mean_reversion import MeanReversionStrategy
+from trading_engine.strategies.adaptive_engine import AdaptiveStrategy
 from trading_engine.strategies.grid_trading import GridTradingStrategy
 from trading_engine.utils.notifier import send_trade_entry, send_trade_exit, send_signal, send_heartbeat, send_alert
 
@@ -35,7 +35,7 @@ logger = logging.getLogger("TradingEngine")
 
 class TradingEngine:
     def __init__(self):
-        logger.info("🚀 Initializing Trading Engine (Multi-Asset V6)...")
+        logger.info("🚀 Initializing Trading Engine (Chameleon V7)...")
         
         # 1. Initialize Core Components
         self.db = DatabaseHandler() 
@@ -57,29 +57,26 @@ class TradingEngine:
         # 3. Load Active Strategies
         self.strategies = []
         
-        # BTC Mean Reversion
-        if "MEAN_REVERSION" in ACTIVE_STRATEGIES:
-            self.strategies.append(MeanReversionStrategy(
-                "BTC_MeanRev", 
-                params=STRATEGIES["MEAN_REVERSION"]["params"]
+        # BTC Chameleon Adaptive Strategy
+        if "ADAPTIVE_ENGINE" in ACTIVE_STRATEGIES:
+            self.strategies.append(AdaptiveStrategy(
+                "BTC_Adaptive", 
+                params=STRATEGIES["ADAPTIVE_ENGINE"]["params"]
             ))
             # Set internal props for strategy routing
-            self.strategies[-1]._symbol = LIVE_ALLOCATION['BTC_MeanRev']['symbol']
-            self.strategies[-1]._budget = LIVE_ALLOCATION['BTC_MeanRev']['budget']
-            logger.info(f"✅ Loaded Strategy: BTC_MeanRev (Budget: ${self.strategies[-1]._budget})")
+            self.strategies[-1]._symbol = LIVE_ALLOCATION['BTC_Adaptive']['symbol']
+            self.strategies[-1]._budget = LIVE_ALLOCATION['BTC_Adaptive']['budget']
+            logger.info(f"✅ Loaded Strategy: BTC_Adaptive (Budget: ${self.strategies[-1]._budget})")
 
-        # SOL Mean Reversion
-        if "MEAN_REVERSION_SOL" in ACTIVE_STRATEGIES:
-            # We assume MeanReversionStrategy handles SOL params internally if passed
-            # But wait, class structure might expect specific params.
-            # We instantiate passing correct params.
-            self.strategies.append(MeanReversionStrategy(
-                "SOL_MeanRev",
-                params=STRATEGIES["MEAN_REVERSION_SOL"]["params"]
+        # SOL Chameleon Adaptive Strategy
+        if "ADAPTIVE_ENGINE_SOL" in ACTIVE_STRATEGIES:
+            self.strategies.append(AdaptiveStrategy(
+                "SOL_Adaptive",
+                params=STRATEGIES["ADAPTIVE_ENGINE_SOL"]["params"]
             ))
-            self.strategies[-1]._symbol = LIVE_ALLOCATION['SOL_MeanRev']['symbol']
-            self.strategies[-1]._budget = LIVE_ALLOCATION['SOL_MeanRev']['budget']
-            logger.info(f"✅ Loaded Strategy: SOL_MeanRev (Budget: ${self.strategies[-1]._budget})")
+            self.strategies[-1]._symbol = LIVE_ALLOCATION['SOL_Adaptive']['symbol']
+            self.strategies[-1]._budget = LIVE_ALLOCATION['SOL_Adaptive']['budget']
+            logger.info(f"✅ Loaded Strategy: SOL_Adaptive (Budget: ${self.strategies[-1]._budget})")
 
         # Selective Grid
         if "GRID_TRADING" in ACTIVE_STRATEGIES and False: # Disabled in code

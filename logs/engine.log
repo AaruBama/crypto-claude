@@ -1,0 +1,21 @@
+2026-02-20 02:29:09,106 - INFO - 🚀 Initializing Trading Engine (Multi-Asset V6)...
+2026-02-20 02:29:09,108 - INFO - ✅ Database initialized with WAL mode.
+2026-02-20 02:29:09,108 - INFO - 🔑 Using API Key: yMwY...oRRK
+2026-02-20 02:29:09,112 - INFO - 🔌 Connected to Exchange (Paper Mode: TRUE, Data: REAL)
+2026-02-20 02:29:09,112 - INFO - ⏳ Pre-loading historical data for {'BTC/USDT', 'SOL/USDT'}...
+2026-02-20 02:29:09,434 - ERROR - ❌ Pre-load failed for BTC/USDT: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:09,611 - ERROR - ❌ Pre-load failed for SOL/USDT: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:10,882 - INFO - ✅ Production Engine Started. Monitoring: BTC/USDT, SOL/USDT
+2026-02-20 02:29:11,055 - ERROR - Ticker Fetch Error: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:11,232 - ERROR - Ticker Fetch Error: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:12,421 - ERROR - Ticker Fetch Error: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:12,595 - ERROR - Ticker Fetch Error: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:13,789 - ERROR - Ticker Fetch Error: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:13,976 - ERROR - Ticker Fetch Error: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:15,157 - ERROR - Ticker Fetch Error: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:15,347 - ERROR - Ticker Fetch Error: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:16,874 - ERROR - Ticker Fetch Error: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:17,387 - ERROR - Ticker Fetch Error: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:18,586 - ERROR - Ticker Fetch Error: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:19,063 - ERROR - Ticker Fetch Error: binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+2026-02-20 02:29:19,612 - INFO - 🛑 Engine Stopped.

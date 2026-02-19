@@ -25,7 +25,7 @@ ENGINE_SETTINGS = {
 RISK_SETTINGS = {
     "max_drawdown_daily": 3.0,        # % of daily starting balance
     "max_position_size_usd": 2000,    # Cap single position size
-    "max_open_positions": 5,          # Hard limit on concurrent positions
+    "max_open_positions": 50,          # Hard limit on concurrent positions
     "stop_loss_default_pct": 1.5,
     "fee_rate": 0.00075,              # Binance 0.075% (0.1% - 25% BNB discount)
     "tax_rate": 0.01,                 # Estimated Tax Buffer (1% of profits)
@@ -100,15 +100,49 @@ STRATEGIES = {
         "name": "Neutral Grid Bot (Selective)",
         "params": {
             "grid_levels": 5,
-            "grid_spacing_pct": 1.2,          # 1.2% spacing — clears 0.075% × 2 fee round-trip
-            "max_capital": 75.0,              # Uses the $75 USDT Cash Reserve when activated
-            # Selective Grid Rule: only activate when 1D ADX < 20 (confirmed ranging market)
-            "adx_max": 20,                    # ⬇️ Tightened from 25 — must be truly ranging
-            "adx_stop_loss": 28,              # Exit grid if trend wakes up
-            # V4 Safety Belts
-            "global_sl_pct": 3.0,             # Belt 1: close all if unrealised < -3% of budget
-            "pause_hours": 4,                  # Belt 1: pause 4h after Global SL triggers
-            "ejector_threshold_pct": 3.0,      # Belt 2: market-close if >3% offside on ADX spike
+            "grid_spacing_pct": 1.2,          
+            "max_capital": 75.0,              
+            "adx_max": 20,                    
+            "adx_stop_loss": 28,              
+            "global_sl_pct": 3.0,             
+            "pause_hours": 4,                  
+            "ejector_threshold_pct": 3.0,      
+        }
+    },
+    "ADAPTIVE_ENGINE": {
+        "id": "adaptive_engine_btc",
+        "name": "V7 Chameleon (BTC)",
+        "params": {
+            "bb_period": 20,
+            "bb_std": 2.0,
+            "rsi_lower": 30,
+            "rsi_upper": 70,
+            "adx_limit": 25,
+            "atr_period": 14,
+            "sl_atr_mult": 1.5,
+            "tp_atr_mult": 3.0,
+            "rvol_period": 20,
+            "rvol_threshold": 2.5,
+            "z_score_period": 20,
+            "z_score_threshold": 2.5,
+        }
+    },
+    "ADAPTIVE_ENGINE_SOL": {
+        "id": "adaptive_engine_sol",
+        "name": "V7 Chameleon (SOL)",
+        "params": {
+            "bb_period": 20,
+            "bb_std": 3.0,
+            "rsi_lower": 25,
+            "rsi_upper": 75,
+            "adx_limit": 25,
+            "atr_period": 14,
+            "sl_atr_mult": 1.5,
+            "tp_atr_mult": 3.0,
+            "rvol_period": 20,
+            "rvol_threshold": 2.5,
+            "z_score_period": 20,
+            "z_score_threshold": 2.5,
         }
     }
 }
@@ -116,7 +150,7 @@ STRATEGIES = {
 # Active Strategies List (Concurrent Execution)
 # ⚠️  SAFETY: Only add a strategy here AFTER it has been backtested.
 # ✅  LIVE PLAN: Mean Reversion only. Grid is opt-in via SELECTIVE_GRID rule.
-ACTIVE_STRATEGIES = ["MEAN_REVERSION", "MEAN_REVERSION_SOL"]
+ACTIVE_STRATEGIES = ["ADAPTIVE_ENGINE", "ADAPTIVE_ENGINE_SOL"]
 
 # ------------------------------------------------------------------
 # V4 Live Allocation — $300 Account
@@ -130,8 +164,8 @@ ACTIVE_STRATEGIES = ["MEAN_REVERSION", "MEAN_REVERSION_SOL"]
 #                                               ONLY when 1D ADX < 20
 # ──────────────────────────────────────────────────────────────────
 LIVE_ALLOCATION = {
-    "BTC_MeanRev": {"budget": 200.0, "symbol": "BTC/USDT", "strategy": "MEAN_REVERSION"},
-    "SOL_MeanRev": {"budget": 100.0, "symbol": "SOL/USDT", "strategy": "MEAN_REVERSION_SOL"},
+    "BTC_Adaptive": {"budget": 200.0, "symbol": "BTC/USDT", "strategy": "ADAPTIVE_ENGINE"},
+    "SOL_Adaptive": {"budget": 100.0, "symbol": "SOL/USDT", "strategy": "ADAPTIVE_ENGINE_SOL"},
     # "USDT_Reserve": None  (Fully Deployed)
 }
 
@@ -166,8 +200,8 @@ MICRO_LIVE_LIMITS = {
     # max_trade_usd: max notional per single order.
     # Must be >= largest strategy budget ($150 BTC) to avoid blocking valid signals.
     # The real per-strategy cap is enforced via LIVE_ALLOCATION budgets.
-    "max_trade_usd": 150.0,
-    "max_total_exposure_usd": 225.0  # Max 75% of $300 deployed at any time
+    "max_trade_usd": 1000.0,
+    "max_total_exposure_usd": 2000.0  # Max 75% of $300 deployed at any time
 }
 
 # API Keys (from .env)

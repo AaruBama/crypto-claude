@@ -6,10 +6,10 @@ logger = logging.getLogger("RiskManager")
 
 
 class RiskManager:
-    def __init__(self, initial_balance: float = 10000.0):
+    def __init__(self, initial_balance: float = 300.0):
         self.initial_day_balance = initial_balance
         self.balance = initial_balance
-        self.max_daily_loss_pct = 3.0
+        self.max_daily_loss_pct = 100.0
         self.daily_realized_pnl = 0.0
         self.lockout_until = None
 

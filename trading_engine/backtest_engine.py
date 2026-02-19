@@ -10,7 +10,7 @@ import os
 from datetime import datetime, timedelta
 from trading_engine.core.risk_manager import RiskManager
 from trading_engine.core.candle_manager import CandleManager
-from trading_engine.strategies.mean_reversion import MeanReversionStrategy
+from trading_engine.strategies.adaptive_engine import AdaptiveStrategy
 from trading_engine.strategies.grid_trading import GridTradingStrategy
 from trading_engine.config import STRATEGIES
 
@@ -189,6 +189,31 @@ class BacktestEngine:
                         signal['symbol'] = sym
                         signal['budget'] = strategy._budget
                         all_signals.append(signal)
+
+            # --- Portfolio & Correlation Awareness (V7) ---
+            trend_signals = [s for s in all_signals if 'Momentum' in s.get('reason', '')]
+            if len(trend_signals) >= 2:
+                syms = [s['symbol'] for s in trend_signals]
+                if 'BTC/USDT' in syms and 'SOL/USDT' in syms:
+                    cm_btc = self.candle_managers.get('BTC/USDT')
+                    cm_sol = self.candle_managers.get('SOL/USDT')
+                    if cm_btc is not None and cm_sol is not None:
+                        if len(cm_btc.buffer) > 100 and len(cm_sol.buffer) > 100:
+                            import numpy as np
+                            btc_closes = cm_btc.buffer['close'].iloc[-100:].astype(float)
+                            sol_closes = cm_sol.buffer['close'].iloc[-100:].astype(float)
+                            corr = np.corrcoef(btc_closes, sol_closes)[0, 1]
+                            if corr > 0.8:
+                                if not self.quiet:
+                                    logger.info(f"🔗 [Correlated Assets] BTC/SOL Corr = {corr:.2f} (>0.8). Halving Trend Breakout sizes!")
+                                for sig in trend_signals:
+                                    if sig.get('action') == 'PLACE_BATCH':
+                                        for order in sig.get('orders', []):
+                                            if 'metadata' not in order: order['metadata'] = {}
+                                            order['metadata']['qty_pct'] = order['metadata'].get('qty_pct', 1.0) * 0.5
+                                    else:
+                                        if 'metadata' not in sig: sig['metadata'] = {}
+                                        sig['metadata']['qty_pct'] = sig['metadata'].get('qty_pct', 1.0) * 0.5
 
             # --- Collision Prevention & Execution ---
             for signal in all_signals:
@@ -532,31 +557,27 @@ class BacktestEngine:
 # Run: python3 trading_engine/backtest_engine.py
 # ------------------------------------------------------------------
 if __name__ == "__main__":
-    from trading_engine.config import LIVE_ALLOCATION, SELECTIVE_GRID
+    from trading_engine.config import LIVE_ALLOCATION, SELECTIVE_GRID, STRATEGIES
 
     # ----------------------------------------------------------------
-    # Core Strategy Configs — always active
+    # Core Strategy Configs — V7 Chameleon Adaptive Engine
     # ----------------------------------------------------------------
     strategy_configs = [
         {
-            # 💰 $150 — BTC Mean Reversion (Safe Play)
-            # Backtest result: 48.8% WR, +$4.86 on $75 budget
-            # Scaled to $150 → expected ~+$9.72 per 90 days
-            'class': MeanReversionStrategy,
-            'name': 'BTC_MeanRev',
+            # 💰 $150 — BTC Adaptive (Chameleon)
+            'class': AdaptiveStrategy,
+            'name': 'BTC_Adaptive',
             'symbol': 'BTC',
-            'budget': LIVE_ALLOCATION['BTC_MeanRev']['budget'],   # $150
-            'params': STRATEGIES['MEAN_REVERSION']['params'],
+            'budget': LIVE_ALLOCATION['BTC_Adaptive']['budget'],   # $200
+            'params': STRATEGIES['ADAPTIVE_ENGINE']['params'],
         },
         {
-            # 💰 $75 — SOL Mean Reversion (Aggressive Play)
-            # Backtest result: 29% WR, +$5.75 on $75 budget
-            # Higher volatility = higher reward, tighter 3-sigma filter
-            'class': MeanReversionStrategy,
-            'name': 'SOL_MeanRev',
+            # 💰 $75 — SOL Adaptive (Chameleon)
+            'class': AdaptiveStrategy,
+            'name': 'SOL_Adaptive',
             'symbol': 'SOL',
-            'budget': LIVE_ALLOCATION['SOL_MeanRev']['budget'],   # $75
-            'params': STRATEGIES['MEAN_REVERSION_SOL']['params'],
+            'budget': LIVE_ALLOCATION['SOL_Adaptive']['budget'],   # $100
+            'params': STRATEGIES['ADAPTIVE_ENGINE_SOL']['params'],
         },
         # ----------------------------------------------------------------
         # 💰 $75 USDT RESERVE — held as cash, not deployed by default.
@@ -588,16 +609,16 @@ if __name__ == "__main__":
     else:
         print("💰 USDT Reserve ($75) held as cash — Grid is OFF (1D ADX check required to activate)")
 
-    bt = BacktestEngine(initial_balance=300.0, strategy_configs=strategy_configs)
+    bt = BacktestEngine(initial_balance=1000.0, strategy_configs=strategy_configs)
 
     data_files = {
         'BTC': {
-            '1m': 'data/historical/BTC_USDT_1m_90d.csv',
-            '5m': 'data/historical/BTC_USDT_5m_90d.csv',
+            '1m': 'data/historical/BTC_USDT_1m_365d.csv',
+            '5m': 'data/historical/BTC_USDT_5m_365d.csv',
         },
         'SOL': {
-            '1m': 'data/historical/SOL_USDT_1m_90d.csv',
-            '5m': 'data/historical/SOL_USDT_5m_90d.csv',
+            '1m': 'data/historical/SOL_USDT_1m_365d.csv',
+            '5m': 'data/historical/SOL_USDT_5m_365d.csv',
         },
     }
 

@@ -35,25 +35,24 @@ fi
 echo "🔄 Executing remote update..."
 gcloud compute ssh $VM_NAME --zone=$ZONE --project=$PROJECT_ID --command="
     # 1. Unzip to temporary folder
-    rm -rf bot_new
+    sudo rm -rf bot_new
     unzip -q crypto_bot_deploy.zip -d bot_new
     
     # 2. Safety: Copy existing Data & Config from current deployment
     if [ -d bot ]; then
         echo '🛡️ Preserving existing database and .env...'
         # Copy .env
-        [ -f bot/.env ] && cp bot/.env bot_new/
-        # Copy DB if it exists
-        [ -f bot/trading_engine/db.sqlite ] && cp bot/trading_engine/db.sqlite bot_new/trading_engine/
+        [ -f bot/.env ] && sudo cp bot/.env bot_new/
+        [ -f bot/trading_engine/db.sqlite ] && sudo cp bot/trading_engine/db.sqlite bot_new/trading_engine/
     else
         echo '✨ First deployment detected.'
         # For first run, user must create .env manually or we copy local .env if included in zip
     fi
 
     # 3. Swap Directories (Atomic-ish switch)
-    rm -rf bot_old
-    [ -d bot ] && mv bot bot_old
-    mv bot_new bot
+    sudo rm -rf bot_old
+    [ -d bot ] && sudo mv bot bot_old
+    sudo mv bot_new bot
 
     # 4. Docker Rebuild & Restart
     cd bot
