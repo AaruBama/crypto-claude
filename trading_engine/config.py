@@ -13,19 +13,15 @@ ENGINE_SETTINGS = {
     "symbol": "BTC/USDT",
     "timeframe": "15m",         # V7.1: 15m candles for signal quality
     "update_interval": 1,       # seconds
-    "paper_trading": True,      # ✅ PAPER MODE: No real orders sent
-    "LIVE_TRADING_ENABLED": False,
+    "paper_trading": os.getenv("PAPER_TRADING", "True").lower() == "true",
+    "LIVE_TRADING_ENABLED": os.getenv("LIVE_TRADING_ENABLED", "False").lower() == "true",
     "VOL_SPIKE_THRESHOLD": 1.5,
     "Z_SCORE_THRESHOLD": 3.0,
 }
 
 # ──────────────────────────────────────────────────────────────────
-# V7.1 Strategy Switches (2026-02-20 A/B Test Conclusion)
-# Pure momentum outperforms MR-inclusive by ~8% CAGR with 5× lower DD.
-# MR disabled by default; set to True to re-enable for testing.
-# ──────────────────────────────────────────────────────────────────
-ENABLE_MEAN_REVERSION = False
-ENABLE_MOMENTUM_BREAKOUT = True
+ENABLE_MEAN_REVERSION = os.getenv("ENABLE_MEAN_REVERSION", "False").lower() == "true"
+ENABLE_MOMENTUM_BREAKOUT = os.getenv("ENABLE_MOMENTUM_BREAKOUT", "True").lower() == "true"
 
 # Momentum-specific settings
 MOMENTUM_CONSECUTIVE_LOSS_LIMIT = 3    # Pause after N consecutive losers

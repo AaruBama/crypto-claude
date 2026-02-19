@@ -43,10 +43,12 @@ gcloud compute ssh $VM_NAME --zone=$ZONE --project=$PROJECT_ID --command="
         echo '🛡️ Preserving existing database and .env...'
         # Copy .env
         [ -f bot/.env ] && sudo cp bot/.env bot_new/
-        [ -f bot/trading_engine/db.sqlite ] && sudo cp bot/trading_engine/db.sqlite bot_new/trading_engine/
+        # Preserve the actual database path used in db.py (data/trading_bot.db)
+        sudo mkdir -p bot_new/data
+        [ -f bot/data/trading_bot.db ] && sudo cp bot/data/trading_bot.db bot_new/data/
     else
         echo '✨ First deployment detected.'
-        # For first run, user must create .env manually or we copy local .env if included in zip
+        sudo mkdir -p bot_new/data
     fi
 
     # 3. Swap Directories (Atomic-ish switch)
@@ -63,13 +65,13 @@ gcloud compute ssh $VM_NAME --zone=$ZONE --project=$PROJECT_ID --command="
     sudo docker stop trader 2>/dev/null || true
     sudo docker rm trader 2>/dev/null || true
     
-    # Run new container (Persist DB via volume map just in case)
+    # Run new container (Persist DB via volume map)
     sudo docker run -d \
       --restart unless-stopped \
       --name trader \
       --env-file .env \
-      -v \$(pwd)/trading_engine/db.sqlite:/app/trading_engine/db.sqlite \
-      -v \$(pwd)/logs:/app/logs \
+      -v $(pwd)/data:/app/data \
+      -v $(pwd)/logs:/app/logs \
       crypto-bot
 
     echo '✅ Service started!'

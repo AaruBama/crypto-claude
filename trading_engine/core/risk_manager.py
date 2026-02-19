@@ -1,3 +1,4 @@
+import os
 import logging
 from datetime import datetime, timedelta
 from trading_engine import config
@@ -23,8 +24,29 @@ class RiskManager:
         self.week_start_balance = initial_balance
         
         # V7.1 Live Trading Ramp-Up
-        self.live_start_time = datetime.now()  # Reset when going live
+        self.live_start_path = "data/live_start.txt"
+        self.live_start_time = self._load_live_start_time()
         self._min_balance_alert_sent = False
+
+    def _load_live_start_time(self) -> datetime:
+        """Loads live start time from file or creates new if missing (persistent across restarts)."""
+        if os.path.exists(self.live_start_path):
+            try:
+                with open(self.live_start_path, "r") as f:
+                    ts_str = f.read().strip()
+                    return datetime.fromisoformat(ts_str)
+            except Exception as e:
+                logger.error(f"Error loading live_start_time: {e}")
+        
+        # If missing or error, set to now and save
+        now = datetime.now()
+        try:
+            os.makedirs(os.path.dirname(self.live_start_path), exist_ok=True)
+            with open(self.live_start_path, "w") as f:
+                f.write(now.isoformat())
+        except Exception as e:
+            logger.error(f"Error saving live_start_time: {e}")
+        return now
 
         # V4 Safety Belt 3: Budget Balance
         # Maps strategy_id → reserved USD amount.
@@ -169,7 +191,11 @@ class RiskManager:
         Safety floor check. If balance drops below MIN_ACCOUNT_BALANCE_USD,
         pause all new entries and send a Telegram alert (once).
         Returns True if balance is OK, False if below minimum.
+        Only active when LIVE_TRADING_ENABLED=True — paper mode skips this.
         """
+        if not config.LIVE_TRADING_ENABLED:
+            return True  # Never block in paper mode
+        
         if self.balance < config.MIN_ACCOUNT_BALANCE_USD:
             if not self._min_balance_alert_sent:
                 logger.error(
@@ -177,7 +203,6 @@ class RiskManager:
                     f"${config.MIN_ACCOUNT_BALANCE_USD:.2f} minimum. "
                     f"ALL NEW ENTRIES PAUSED."
                 )
-                # Send Telegram alert
                 try:
                     from trading_engine.utils.notifier import send_alert
                     send_alert(
@@ -192,7 +217,6 @@ class RiskManager:
             return False
         else:
             if self._min_balance_alert_sent:
-                # Balance recovered — reset the alert flag
                 logger.info(f"✅ Balance recovered to ${self.balance:.2f} — entries re-enabled.")
                 self._min_balance_alert_sent = False
             return True
