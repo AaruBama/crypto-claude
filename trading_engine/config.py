@@ -117,14 +117,14 @@ STRATEGIES = {
             "bb_std": 2.0,
             "rsi_lower": 30,
             "rsi_upper": 70,
-            "adx_limit": 25,
+            "adx_limit": 30,
             "atr_period": 14,
             "sl_atr_mult": 1.5,
             "tp_atr_mult": 3.0,
             "rvol_period": 20,
-            "rvol_threshold": 2.5,
+            "rvol_threshold": 3.0,
             "z_score_period": 20,
-            "z_score_threshold": 2.5,
+            "z_score_threshold": 3.0,
         }
     },
     "ADAPTIVE_ENGINE_SOL": {
@@ -135,14 +135,14 @@ STRATEGIES = {
             "bb_std": 3.0,
             "rsi_lower": 25,
             "rsi_upper": 75,
-            "adx_limit": 25,
+            "adx_limit": 35,
             "atr_period": 14,
             "sl_atr_mult": 1.5,
-            "tp_atr_mult": 3.0,
+            "tp_atr_mult": 4.0,
             "rvol_period": 20,
-            "rvol_threshold": 2.5,
+            "rvol_threshold": 3.0,
             "z_score_period": 20,
-            "z_score_threshold": 2.5,
+            "z_score_threshold": 3.0,
         }
     }
 }

@@ -24,10 +24,23 @@ def run_multi_asset_backtest():
     df_sol['time'] = pd.to_datetime(df_sol['time'])
     df_sol.set_index('time', inplace=True)
     
-    # Align data
-    print("⏳ Aligning indices...")
-    df_combined = pd.DataFrame({'BTC': df_btc['close'], 'SOL': df_sol['close']}).dropna()
-    close = df_combined
+    # ── KEY CHANGE #1: Resample 5m → 15m for realistic trade frequency ──
+    print("⏳ Resampling to 15m and aligning indices...")
+    df_btc = df_btc.resample('15min').agg({
+        'open': 'first', 'high': 'max', 'low': 'min', 
+        'close': 'last', 'volume': 'sum'
+    }).dropna()
+    df_sol = df_sol.resample('15min').agg({
+        'open': 'first', 'high': 'max', 'low': 'min', 
+        'close': 'last', 'volume': 'sum'
+    }).dropna()
+
+    # Align on common timestamps
+    common_idx = df_btc.index.intersection(df_sol.index)
+    df_btc = df_btc.loc[common_idx]
+    df_sol = df_sol.loc[common_idx]
+    
+    close = pd.DataFrame({'BTC': df_btc['close'], 'SOL': df_sol['close']}).dropna()
     
     print("📈 Calculating Indicators...")
     
@@ -41,35 +54,34 @@ def run_multi_asset_backtest():
         'SOL': LIVE_ALLOCATION['SOL_Adaptive']['budget']  # 100
     }
     
-    # We will build boolean DataFrames for entries/shorts
+    # Boolean DataFrames for entries/shorts
     mr1_entries = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
-    mr1_shorts = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
-    
+    mr1_shorts  = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
     mr2_entries = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
-    mr2_shorts = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
+    mr2_shorts  = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
     
     trend_entries = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
-    trend_shorts = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
+    trend_shorts  = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
     
     # Size DataFrames
-    mr1_size = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
-    mr2_size = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
-    trend_size = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
+    mr1_size        = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
+    mr2_size        = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
+    trend_size_tp   = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
+    trend_size_trail = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
     
     # SL/TP DataFrames
-    sl_mr1 = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
-    tp_mr1 = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
-    
-    sl_mr2 = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
+    sl_mr1   = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
+    tp_mr1   = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
+    sl_mr2   = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
     sl_trend = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
+    tp_trend = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
     
     # Portfolio correlation over last 100 periods
     print("🔗 Calculating Rolling Correlation...")
     rolling_corr = close['BTC'].rolling(100).corr(close['SOL']).fillna(0)
     
     for sym, df_orig in [('BTC', df_btc), ('SOL', df_sol)]:
-        df = df_orig.reindex(close.index) # Align
-        
+        df = df_orig.reindex(close.index)
         cfg = configs[sym]
         budget = budgets[sym]
         
@@ -84,14 +96,13 @@ def run_multi_asset_backtest():
         rsi = df.ta.rsi(length=cfg.get('rsi_period', 14))
         adx_df = df.ta.adx(length=cfg.get('adx_period', 14))
         adx = adx_df[[c for c in adx_df.columns if c.startswith('ADX_')][0]]
-        
         atr = df.ta.atr(length=cfg.get('atr_period', 14))
         
         vol_sma = c_vol.rolling(cfg.get('rvol_period', 20)).mean()
         rvol = c_vol / vol_sma
         
         z_mean = c_close.rolling(cfg.get('z_score_period', 20)).mean()
-        z_std = c_close.rolling(cfg.get('z_score_period', 20)).std()
+        z_std  = c_close.rolling(cfg.get('z_score_period', 20)).std()
         z_score = (c_close - z_mean) / z_std
         
         ema_200 = df.ta.ema(length=200)
@@ -102,121 +113,154 @@ def run_multi_asset_backtest():
         
         adx_falling = adx < adx.shift(1)
         
-        ranging_mask = (adx <= cfg.get('adx_limit', 25)) & (~chaos_mask)
-        trending_mask = (adx > cfg.get('adx_limit', 25)) & (~chaos_mask)
+        ranging_mask  = (adx <= cfg.get('adx_limit', 30)) & (~chaos_mask)
+        trending_mask = (adx > cfg.get('adx_limit', 30)) & (~chaos_mask)
         
-        # Mean Reversion
-        mr_buy = (c_close <= bbl) & (rsi < cfg.get('rsi_lower', 30)) & (z_score < -cfg.get('z_score_threshold', 2.5)) & (rvol > cfg.get('rvol_threshold', 2.5)) & ranging_mask
-        mr_sell = (c_close >= bbu) & (rsi > cfg.get('rsi_upper', 70)) & (z_score > cfg.get('z_score_threshold', 2.5)) & (rvol > cfg.get('rvol_threshold', 2.5)) & ranging_mask
+        # ── KEY CHANGE #2: Manual Engulfing Detection (no TA-Lib dependency) ──
+        prev_open  = df['open'].shift(1)
+        prev_close = c_close.shift(1)
+        curr_open  = df['open']
+        
+        bullish_engulfing = ((c_close > curr_open) & (prev_close < prev_open) & 
+                            (c_close >= prev_open) & (curr_open <= prev_close))
+        bearish_engulfing = ((c_close < curr_open) & (prev_close > prev_open) & 
+                            (c_close <= prev_open) & (curr_open >= prev_close))
+        
+        # ── Mean Reversion (with engulfing filters) ──
+        mr_buy  = ((c_close <= bbl) & (rsi < cfg.get('rsi_lower', 30)) & 
+                   (z_score < -cfg.get('z_score_threshold', 3.0)) & 
+                   (rvol > cfg.get('rvol_threshold', 3.0)) & ranging_mask)
+        mr_sell = ((c_close >= bbu) & (rsi > cfg.get('rsi_upper', 70)) & 
+                   (z_score > cfg.get('z_score_threshold', 3.0)) & 
+                   (rvol > cfg.get('rvol_threshold', 3.0)) & ranging_mask)
+        
+        # ── KEY CHANGE #3: BTC long-only MR, SOL requires engulfing ──
+        if sym == 'BTC':
+            mr_sell = pd.Series(False, index=close.index)
+        elif sym == 'SOL':
+            mr_buy  = mr_buy & bullish_engulfing
+            mr_sell = mr_sell & bearish_engulfing
         
         mr1_entries[sym] = mr_buy.fillna(False)
-        mr1_shorts[sym] = mr_sell.fillna(False)
+        mr1_shorts[sym]  = mr_sell.fillna(False)
         mr2_entries[sym] = mr_buy.fillna(False)
-        mr2_shorts[sym] = mr_sell.fillna(False)
+        mr2_shorts[sym]  = mr_sell.fillna(False)
         
-        # Sizes for MR: 50% budget
         mr1_size[sym] = budget * 0.5
         mr2_size[sym] = budget * 0.5
         
-        # Trend Following
-        trend_buy = (c_close > bbu) & (~adx_falling) & trending_mask & (c_close > ema_200)
-        trend_sell = (c_close < bbl) & (~adx_falling) & trending_mask & (c_close < ema_200)
+        # ── KEY CHANGE #4: Trend requires rising ADX + volume + engulfing ──
+        rising_adx_3 = (adx > adx.shift(1)) & (adx.shift(1) > adx.shift(2))
+        rising_vol_3 = (c_vol > c_vol.shift(1)) & (c_vol.shift(1) > c_vol.shift(2))
+        trend_filter = rising_adx_3 & rising_vol_3
+        
+        trend_buy  = ((c_close > bbu) & trending_mask & (c_close > ema_200) & 
+                      bullish_engulfing & trend_filter)
+        trend_sell = ((c_close < bbl) & trending_mask & (c_close < ema_200) & 
+                      bearish_engulfing & trend_filter)
         
         trend_entries[sym] = trend_buy.fillna(False)
-        trend_shorts[sym] = trend_sell.fillna(False)
+        trend_shorts[sym]  = trend_sell.fillna(False)
         
-        # Base size for Trend: 100% budget
-        trend_size[sym] = pd.Series(budget, index=close.index)
+        # Trend: 30% partial TP, 70% trailing
+        trend_size_tp[sym]    = pd.Series(budget * 0.3, index=close.index)
+        trend_size_trail[sym] = pd.Series(budget * 0.7, index=close.index)
         
         # Stops
         sl_mr1[sym] = (atr * cfg.get('sl_atr_mult', 1.5) / c_close).fillna(0.015)
-        tp_dist_mid = (abs(c_close - bbm) / c_close).fillna(0.015)
-        tp_mr1[sym] = tp_dist_mid
+        tp_mr1[sym] = (abs(c_close - bbm) / c_close).fillna(0.015)
         
-        sl_mr2[sym] = (atr * cfg.get('tp_atr_mult', 3.0) / c_close).fillna(0.015)
+        sl_mr2[sym] = (atr * cfg.get('tp_atr_mult', 3.0) / c_close).fillna(0.02)
         
-        # Trend fat tail stop: 10.0 ATR
-        sl_trend[sym] = (atr * 10.0 / c_close).fillna(0.04)
+        sl_trend[sym] = (atr * 8.0 / c_close).fillna(0.04)
+        tp_trend[sym] = (atr * 5.0 / c_close).fillna(0.02)
 
-    # Apply Correlation Filter for Trend Size
-    both_trend_signals = (trend_entries['BTC'] | trend_shorts['BTC']) & (trend_entries['SOL'] | trend_shorts['SOL'])
-    corr_override = both_trend_signals & (rolling_corr > 0.8)
+    # Correlation Filter for Trend Size
+    both_trend = (trend_entries['BTC'] | trend_shorts['BTC']) & (trend_entries['SOL'] | trend_shorts['SOL'])
+    corr_override = both_trend & (rolling_corr > 0.8)
     
-    trend_size.loc[corr_override, 'BTC'] *= 0.5
-    trend_size.loc[corr_override, 'SOL'] *= 0.5
+    trend_size_tp.loc[corr_override, 'BTC'] *= 0.5
+    trend_size_tp.loc[corr_override, 'SOL'] *= 0.5
+    trend_size_trail.loc[corr_override, 'BTC'] *= 0.5
+    trend_size_trail.loc[corr_override, 'SOL'] *= 0.5
     
     print(f"🔗 Correlation overrides applied to {corr_override.sum()} concurrent signals.")
 
+    # ── KEY CHANGE #5: Realistic fee model ──
+    REALISTIC_FEE = 0.00075      # Binance 0.075% with BNB discount
+    REALISTIC_SLIPPAGE = 0.0005  # 0.05% conservative slippage
+
     print("🚀 Running VectorBT Simulation for Portfolio 1 (Mean Reversion Tier 1)...")
     pf_mr1 = vbt.Portfolio.from_signals(
-        close,
-        entries=mr1_entries,
-        short_entries=mr1_shorts,
-        sl_stop=sl_mr1,
-        tp_stop=tp_mr1,
-        fees=0.0002,
-        freq='5T',
-        init_cash=300.0,
-        size=mr1_size,
-        size_type='value'
+        close, entries=mr1_entries, short_entries=mr1_shorts,
+        sl_stop=sl_mr1, tp_stop=tp_mr1,
+        fees=REALISTIC_FEE, slippage=REALISTIC_SLIPPAGE,
+        freq='15min', init_cash=300.0, size=mr1_size, size_type='value'
     )
     
     print("🚀 Running VectorBT Simulation for Portfolio 2 (Mean Reversion Tier 2)...")
     pf_mr2 = vbt.Portfolio.from_signals(
-        close,
-        entries=mr2_entries,
-        short_entries=mr2_shorts,
-        sl_stop=sl_mr2,
-        sl_trail=True,
-        tp_stop=0.10,
-        fees=0.0002,
-        freq='5T',
-        init_cash=300.0,
-        size=mr2_size,
-        size_type='value'
+        close, entries=mr2_entries, short_entries=mr2_shorts,
+        sl_stop=sl_mr2, sl_trail=True, tp_stop=0.10,
+        fees=REALISTIC_FEE, slippage=REALISTIC_SLIPPAGE,
+        freq='15min', init_cash=300.0, size=mr2_size, size_type='value'
     )
     
-    print("🚀 Running VectorBT Simulation for Portfolio 3 (Trend Follower)...")
-    pf_trend = vbt.Portfolio.from_signals(
-        close,
-        entries=trend_entries,
-        short_entries=trend_shorts,
-        sl_stop=sl_trend,
-        sl_trail=True,
-        fees=0.0002,
-        freq='5T',
-        init_cash=300.0,
-        size=trend_size,
-        size_type='value'
+    print("🚀 Running VectorBT Simulation for Portfolio 3 (Trend - 30% TP)...")
+    pf_trend_tp = vbt.Portfolio.from_signals(
+        close, entries=trend_entries, short_entries=trend_shorts,
+        sl_stop=sl_trend, tp_stop=tp_trend,
+        fees=REALISTIC_FEE, slippage=REALISTIC_SLIPPAGE,
+        freq='15min', init_cash=300.0, size=trend_size_tp, size_type='value'
+    )
+
+    print("🚀 Running VectorBT Simulation for Portfolio 3 (Trend - 70% Trail)...")
+    pf_trend_trail = vbt.Portfolio.from_signals(
+        close, entries=trend_entries, short_entries=trend_shorts,
+        sl_stop=sl_trend, sl_trail=True,
+        fees=REALISTIC_FEE, slippage=REALISTIC_SLIPPAGE,
+        freq='15min', init_cash=300.0, size=trend_size_trail, size_type='value'
     )
     
+    # ═══════════════════════════════════════════════════════
     # Combined Performance
+    # ═══════════════════════════════════════════════════════
     t1_profit = pf_mr1.total_profit().sum()
     t2_profit = pf_mr2.total_profit().sum()
-    tr_profit = pf_trend.total_profit().sum()
+    tr_tp_profit = pf_trend_tp.total_profit().sum()
+    tr_trail_profit = pf_trend_trail.total_profit().sum()
+    tr_profit = tr_tp_profit + tr_trail_profit
     total_net = t1_profit + t2_profit + tr_profit
     
     mr_trades = pf_mr1.trades.count().sum() + pf_mr2.trades.count().sum()
-    tr_trades = pf_trend.trades.count().sum()
+    tr_trades = pf_trend_tp.trades.count().sum() + pf_trend_trail.trades.count().sum()
     total_trades = mr_trades + tr_trades
     
     # Weighted Win Rate
     mr1_wr = pf_mr1.trades.win_rate().fillna(0)
     mr2_wr = pf_mr2.trades.win_rate().fillna(0)
-    tr_wr = pf_trend.trades.win_rate().fillna(0)
+    tr_tp_wr = pf_trend_tp.trades.win_rate().fillna(0)
+    tr_trail_wr = pf_trend_trail.trades.win_rate().fillna(0)
     
-    wins = (mr1_wr * pf_mr1.trades.count()).sum() + (mr2_wr * pf_mr2.trades.count()).sum() + (tr_wr * pf_trend.trades.count()).sum()
+    wins = ((mr1_wr * pf_mr1.trades.count()).sum() + 
+            (mr2_wr * pf_mr2.trades.count()).sum() + 
+            (tr_tp_wr * pf_trend_tp.trades.count()).sum() +
+            (tr_trail_wr * pf_trend_trail.trades.count()).sum())
     win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
     
     # Aggregate Equity Curve
-    total_equity_curve = (pf_mr1.value() - 300.0) + (pf_mr2.value() - 300.0) + (pf_trend.value() - 300.0)
-    total_equity_curve = total_equity_curve.sum(axis=1) + 300.0
+    total_equity_curve = ((pf_mr1.value().sum(axis=1) - 300.0) + 
+                          (pf_mr2.value().sum(axis=1) - 300.0) + 
+                          (pf_trend_tp.value().sum(axis=1) - 300.0) + 
+                          (pf_trend_trail.value().sum(axis=1) - 300.0) + 300.0)
     
-    # Calculate Max Drawdown from the combined equity curve
     cumulative_max = total_equity_curve.expanding().max()
     drawdown = (total_equity_curve - cumulative_max) / cumulative_max
     max_drawdown = drawdown.min() * 100
     
+    # ═══════════════════════════════════════════════════════
+    # Summary Output
+    # ═══════════════════════════════════════════════════════
     print("="*50)
     print("📊 V7 CHAMELEON REAL-WORLD MULTI-ASSET TEST (1 Year)")
     print("="*50)
@@ -232,10 +276,49 @@ def run_multi_asset_backtest():
     print(f"Trend Following            : PnL ${tr_profit:.2f} | Trades {tr_trades}")
     
     print("\n--- Asset Breakdown ---")
-    asset_pnl = pf_mr1.total_profit() + pf_mr2.total_profit() + pf_trend.total_profit()
+    asset_pnl = pf_mr1.total_profit() + pf_mr2.total_profit() + pf_trend_tp.total_profit() + pf_trend_trail.total_profit()
     for sym in ['BTC', 'SOL']:
         print(f"{sym:<4}: PnL ${asset_pnl[sym]:.2f}")
+        
+    print("\n--- Performance Metrics ---")
+    gross_profit = (pf_mr1.trades.winning.pnl.sum().sum() + pf_mr2.trades.winning.pnl.sum().sum() + 
+                    pf_trend_tp.trades.winning.pnl.sum().sum() + pf_trend_trail.trades.winning.pnl.sum().sum())
+    gross_loss = (pf_mr1.trades.losing.pnl.sum().sum() + pf_mr2.trades.losing.pnl.sum().sum() + 
+                  pf_trend_tp.trades.losing.pnl.sum().sum() + pf_trend_trail.trades.losing.pnl.sum().sum())
     
+    # Fee estimate
+    avg_fee_slip = (REALISTIC_FEE + REALISTIC_SLIPPAGE) * 2
+    total_fees = (mr_trades * 150.0 * avg_fee_slip) + (tr_trades * 300.0 * avg_fee_slip)
+    
+    avg_pnl_per_trade = total_net / total_trades if total_trades > 0 else 0
+    gross_pnl_abs = abs(gross_profit) + abs(gross_loss)
+    fee_drag_pct = (total_fees / gross_pnl_abs * 100) if gross_pnl_abs > 0 else 0
+    
+    # Expectancy
+    losses = total_trades - wins
+    avg_win = gross_profit / wins if wins > 0 else 0
+    avg_loss_val = abs(gross_loss) / losses if losses > 0 else 0
+    expectancy = (avg_win * (win_rate/100)) - (avg_loss_val * (1 - (win_rate/100)))
+    
+    # Advanced Metrics
+    cagr = (total_net / 300.0) * 100
+    calmar = abs(cagr / max_drawdown) if max_drawdown < 0 else 0
+    profit_factor = abs(gross_profit / gross_loss) if gross_loss != 0 else float('inf')
+    
+    # Proxy Sharpe (Annualized from 15m bars: 252 days * 96 bars/day = 24192)
+    total_returns = total_equity_curve.pct_change().dropna()
+    ann_sharpe = 0
+    if total_returns.std() != 0:
+        ann_sharpe = (total_returns.mean() / total_returns.std()) * (24192 ** 0.5)
+    
+    print(f"Average PnL per Trade:  ${avg_pnl_per_trade:.2f}")
+    print(f"Total Fees (est.):      ${total_fees:.2f}")
+    print(f"Fee Drag %:             {fee_drag_pct:.2f}%")
+    print(f"Expectancy:             ${expectancy:.2f}")
+    print(f"Profit Factor:          {profit_factor:.2f}")
+    print(f"CAGR:                   {cagr:.2f}%")
+    print(f"Calmar Ratio:           {calmar:.2f}")
+    print(f"Proxy Sharpe Ratio:     {ann_sharpe:.2f}")
     print("="*50)
 
 if __name__ == '__main__':
