@@ -21,6 +21,10 @@ class RiskManager:
         # V7.1 Weekly Compounding
         self.weekly_realized_pnl = 0.0
         self.week_start_balance = initial_balance
+        
+        # V7.1 Live Trading Ramp-Up
+        self.live_start_time = datetime.now()  # Reset when going live
+        self._min_balance_alert_sent = False
 
         # V4 Safety Belt 3: Budget Balance
         # Maps strategy_id → reserved USD amount.
@@ -133,6 +137,67 @@ class RiskManager:
         self.week_start_balance = self.balance
 
     # ------------------------------------------------------------------
+    # V7.1 Live Trading Ramp-Up
+    # ------------------------------------------------------------------
+    def get_live_budget_multiplier(self) -> float:
+        """
+        Returns a position size multiplier based on how long the bot has
+        been running live. Phases gradually increase exposure:
+          Phase 1 (days 0–6):   25% of backtested budget
+          Phase 2 (days 7–20):  50% of backtested budget
+          Phase 3 (day 21+):   100% (full deployment)
+        Returns 1.0 when not in live mode (paper trading).
+        """
+        if not config.LIVE_TRADING_ENABLED:
+            return 1.0
+        
+        days_live = (datetime.now() - self.live_start_time).days
+        
+        if days_live < config.LIVE_PHASE_DAYS[0]:
+            phase = 0
+        elif days_live < sum(config.LIVE_PHASE_DAYS[:2]):
+            phase = 1
+        else:
+            phase = 2
+        
+        multiplier = config.LIVE_BUDGET_PCT_PHASES[phase]
+        logger.info(f"📈 LIVE PHASE {phase+1}: Day {days_live} → budget multiplier {multiplier:.0%}")
+        return multiplier
+
+    def check_min_balance(self) -> bool:
+        """
+        Safety floor check. If balance drops below MIN_ACCOUNT_BALANCE_USD,
+        pause all new entries and send a Telegram alert (once).
+        Returns True if balance is OK, False if below minimum.
+        """
+        if self.balance < config.MIN_ACCOUNT_BALANCE_USD:
+            if not self._min_balance_alert_sent:
+                logger.error(
+                    f"🚨 BALANCE FLOOR BREACH: ${self.balance:.2f} < "
+                    f"${config.MIN_ACCOUNT_BALANCE_USD:.2f} minimum. "
+                    f"ALL NEW ENTRIES PAUSED."
+                )
+                # Send Telegram alert
+                try:
+                    from trading_engine.utils.notifier import send_alert
+                    send_alert(
+                        f"🚨 *BALANCE FLOOR BREACH*\n\n"
+                        f"Current Balance: `${self.balance:.2f}`\n"
+                        f"Minimum Required: `${config.MIN_ACCOUNT_BALANCE_USD:.2f}`\n\n"
+                        f"_All new entries are PAUSED until balance is restored._"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send Telegram alert: {e}")
+                self._min_balance_alert_sent = True
+            return False
+        else:
+            if self._min_balance_alert_sent:
+                # Balance recovered — reset the alert flag
+                logger.info(f"✅ Balance recovered to ${self.balance:.2f} — entries re-enabled.")
+                self._min_balance_alert_sent = False
+            return True
+
+    # ------------------------------------------------------------------
     # V4 Safety Belt 3: Budget Balance (Strategy Reservations)
     # ------------------------------------------------------------------
     def reserve_budget(self, strategy_id: str, amount_usd: float):
@@ -219,6 +284,14 @@ class RiskManager:
             logger.warning(f"❌ RISK ALERT: Account locked until {self.lockout_until}")
             return False
 
+        # 1b. V7.1 Minimum Balance Floor
+        if not self.check_min_balance():
+            return False
+
+        # 1c. V7.1 Momentum Streak Cooldown
+        if self.is_momentum_cooled_down():
+            return False
+
         # 2. Position Limit
         if current_positions >= RISK_SETTINGS.get("max_open_positions", 10):
             logger.warning(f"❌ RISK ALERT: Max Open Positions Reached ({current_positions})")
@@ -229,10 +302,9 @@ class RiskManager:
             logger.warning(f"❌ MICRO-LIVE: Max Total Exposure Reached (${current_exposure_usd:.2f})")
             return False
 
-        # 4. Break-Even Filter (0.60% min target) — skip for grid orders (tp close to entry by design)
+        # 4. Break-Even Filter (0.60% min target)
         if entry_price and tp_price:
             profit_target_pct = (abs(tp_price - entry_price) / entry_price) * 100
-            # Grid spacing is 1.2% which clears the 0.60% bar — only block if truly tiny
             min_profit = RISK_SETTINGS.get("min_profit_pct", 0.30)
             if profit_target_pct < min_profit:
                 logger.info(
@@ -257,10 +329,15 @@ class RiskManager:
         """
         Qty = (Balance × Risk%) / |Entry - StopLoss|
         Capped by MICRO_LIVE_LIMITS.
+        Scaled by live budget multiplier when in live mode.
         """
         from trading_engine.config import MICRO_LIVE_LIMITS
 
         if self.balance <= 0 or self.is_locked_out():
+            return 0.0
+        
+        # V7.1: Check minimum balance floor
+        if not self.check_min_balance():
             return 0.0
 
         risk_amount_usd = self.balance * (risk_pct / 100)
@@ -270,6 +347,12 @@ class RiskManager:
             return 0.0
 
         qty = risk_amount_usd / price_diff
+
+        # V7.1: Apply live ramp-up multiplier
+        live_mult = self.get_live_budget_multiplier()
+        if live_mult < 1.0:
+            qty *= live_mult
+            logger.info(f"📉 LIVE RAMP-UP: Position sized at {live_mult:.0%} → qty={qty:.6f}")
 
         # Cap: max $20 per trade (Micro-Live)
         trade_usd = qty * entry_price

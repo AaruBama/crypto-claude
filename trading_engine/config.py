@@ -33,6 +33,19 @@ MOMENTUM_LOSS_COOLDOWN_HOURS = 48      # Hours to pause after streak
 MOMENTUM_WEEKLY_COMPOUND_THRESHOLD = 1.5  # % weekly PnL to trigger compounding
 MOMENTUM_COMPOUND_FRACTION = 0.5       # Fraction of weekly return to reinvest
 
+# ──────────────────────────────────────────────────────────────────
+# V7.1 Live Trading Ramp-Up (Phased Budget Scaling)
+# When LIVE_TRADING_ENABLED=True, position sizes are multiplied by
+# a phase-dependent factor to gradually increase exposure.
+# Phase 1 (days 0–6):   25% of backtested budget
+# Phase 2 (days 7–20):  50% of backtested budget
+# Phase 3 (day 21+):   100% of backtested budget (full deployment)
+# ──────────────────────────────────────────────────────────────────
+LIVE_TRADING_ENABLED = ENGINE_SETTINGS.get("LIVE_TRADING_ENABLED", False)
+LIVE_PHASE_DAYS = [7, 14, 0]            # Duration of each phase (Phase 3 = indefinite)
+LIVE_BUDGET_PCT_PHASES = [0.25, 0.50, 1.0]  # Budget multiplier per phase
+MIN_ACCOUNT_BALANCE_USD = 50.0           # Hard floor: pause all entries below this
+
 # Risk Limits
 RISK_SETTINGS = {
     "max_drawdown_daily": 3.0,        # % of daily starting balance
