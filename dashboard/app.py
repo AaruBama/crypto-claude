@@ -25,6 +25,8 @@ import config
 # Import AI Advisory helpers from same directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ai_advisory_helpers import render_ai_advisory_tab
+from dashboard.db_helpers import get_dashboard_stats, get_recent_trades_df, get_recent_signals_df, clear_db, get_multi_bot_comparison, get_live_audit_data
+from dashboard.strategy_lab import render_strategy_lab
 
 # Try to use real data, fall back to demo if network unavailable
 USE_DEMO_MODE = False
@@ -1176,7 +1178,7 @@ def main():
                 df = IndicatorCalculator.calculate_all(df)
 
         # Tab Navigation
-        tab_list = ["🚀 Market Analysis", "📋 Order Book & Portfolio", "🤖 AI Advisory"]
+        tab_list = ["🚀 Market Analysis", "📋 Order Book & Portfolio", "🤖 AI Advisory", "🧪 Strategy Lab", "🏆 Scoreboard", "🛡️ Live Audit"]
         tabs = st.tabs(tab_list)
         
         # Tab 0: Market Analysis
@@ -1222,6 +1224,128 @@ def main():
         with tabs[2]:
             render_ai_advisory_tab(df, selected_symbol, st.session_state.collector)
     
+        # Tab 3: Strategy Lab
+        with tabs[3]:
+            render_strategy_lab()
+
+        # Tab 4: Live Scoreboard
+        with tabs[4]:
+            st.markdown("## 🏆 Live Signals Scoreboard")
+            
+            # Fetch Stats
+            current_close = df.iloc[-1]['close'] if df is not None else 0
+            stats = get_dashboard_stats(current_close)
+            
+            # Top Row: KPI Cards
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Gross Profit", f"${stats['pnl_gross']:,.2f}", help="Total profit before fees and taxes.")
+            
+            # Net PnL Color Logic
+            net_color = "normal" if stats['pnl_net'] >= 0 else "inverse"
+            c2.metric("Net Profit", f"${stats['pnl_net']:,.2f}", 
+                      delta=f"{stats['pnl_net']:,.2f}", delta_color=net_color, 
+                      help="Profit after Exchange Fees (0.1%) and Taxes (1%).")
+            
+            c3.metric("Win Rate", f"{stats['win_rate']:.1f}%")
+            c4.metric("Active Trades", stats['active_trades'])
+            
+            # Sub-row for Fees/Taxes & Unrealized
+            sc1, sc2, sc3 = st.columns(3)
+            with sc1:
+                st.caption(f"🛡️ Unrealized: ${stats['pnl_unrealized']:,.2f}")
+            with sc2:
+                st.caption(f"💸 Fees Paid: ${stats['fees']:,.2f}")
+            with sc3:
+                st.caption(f"🏦 Tax Buffer: ${stats['taxes']:,.2f}")
+            
+            st.markdown("### 🤖 Side-by-Side Strategy Stress Test")
+            st.caption("Comparing Standard Traffic Light vs. Volume-Filtered Logic in real-time.")
+            comparison_df = get_multi_bot_comparison()
+            if not comparison_df.empty:
+                st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("Waiting for bots to generate trades...")
+
+            st.markdown("### 📜 Trade History")
+            
+            col_list, col_sig = st.columns([1, 1])
+            
+            with col_list:
+                st.caption("Executed Trades")
+                recent_trades = get_recent_trades_df()
+                if not recent_trades.empty:
+                    st.dataframe(
+                        recent_trades, 
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "opened_at": st.column_config.DatetimeColumn("Opened", format="D MMM, HH:mm"),
+                            "pnl_pct": st.column_config.NumberColumn("PnL %", format="%.2f%%")
+                        }
+                    )
+                else:
+                    st.info("No trades executed yet.")
+
+            with col_sig:
+                st.caption("Recent Signals (Setups)")
+                recent_signals = get_recent_signals_df()
+                if not recent_signals.empty:
+                    # Clean Timestamp
+                    recent_signals['time'] = pd.to_datetime(recent_signals['timestamp']).dt.strftime('%H:%M:%S')
+                    st.dataframe(
+                        recent_signals[['time', 'strategy_id', 'type', 'reason']], 
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                else:
+                    st.info("No signals generated yet.")
+                
+
+        # Tab 5: Live Audit
+        with tabs[5]:
+            st.markdown("## 🛡️ Live Execution Audit")
+            st.caption("Real-time monitoring of slippage, fees, and network latency from Binance.")
+            
+            audit_df, audit_stats = get_live_audit_data()
+            
+            # KPI Row
+            ak1, ak2, ak3 = st.columns(3)
+            ak1.metric("Avg Slippage", f"{audit_stats['avg_slippage']:.4f}%", 
+                      help="Difference between strategy signal price and actual fill price.")
+            ak2.metric("Total Fees Paid", f"${audit_stats['total_fees']:,.2f}", 
+                      help="Real-world trading fees extracted by the exchange.")
+            ak3.metric("Audit Status", "🟢 HEALTHY" if audit_stats['avg_slippage'] < 0.15 else "🔴 POOR")
+            
+            if not audit_df.empty:
+                st.markdown("### 📜 Real-Time Slippage Log")
+                
+                # Apply conditional formatting to highlight critical slippage
+                def highlight_critical(row):
+                    return ['background-color: #591616' if row.is_critical else '' for _ in row]
+                
+                styled_df = audit_df.style.apply(highlight_critical, axis=1)
+                
+                st.dataframe(
+                    styled_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "timestamp": st.column_config.DatetimeColumn("Time", format="HH:mm:ss"),
+                        "slippage_pct": st.column_config.NumberColumn("Slippage %", format="%.4f%%"),
+                        "fee_usd": st.column_config.NumberColumn("Fee $", format="$%.4f"),
+                        "net_pnl": st.column_config.NumberColumn("True Net $", format="$%.2f")
+                    }
+                )
+            else:
+                st.info("No audit logs recorded yet. Start the Live Engine to begin monitoring.")
+
+            st.markdown("---")
+            if st.button("🗑️ Clear History (Reset DB)", type="secondary"):
+                if clear_db():
+                    st.success("Database Wiped.")
+                    time.sleep(1)
+                    st.rerun()
+
     # Render the fragment
     dashboard_content()
 

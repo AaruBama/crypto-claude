@@ -1,0 +1,25 @@
+
+2026-02-18 15:39:44,330 - INFO - 🚀 Initializing Trading Engine (Production Mode)...
+2026-02-18 15:39:44,331 - INFO - ✅ Database initialized with WAL mode.
+2026-02-18 15:39:44,331 - INFO - 🔑 Using API Key: yMwY...oRRK
+2026-02-18 15:39:47,482 - INFO - 📦 Loaded 4230 markets from Binance.
+2026-02-18 15:39:47,482 - WARNING - 🚨 WARNING: LIVE TRADING IS ENABLED. Real orders will be sent.
+2026-02-18 15:39:47,483 - INFO - ✅ Loaded Strategy: Mean Reversion
+2026-02-18 15:42:09,914 - INFO - 🚀 Initializing Trading Engine (Production Mode)...
+2026-02-18 15:42:09,914 - INFO - ✅ Database initialized with WAL mode.
+2026-02-18 15:42:09,914 - INFO - 🔑 Using API Key: yMwY...oRRK
+2026-02-18 15:42:13,593 - INFO - 📦 Loaded 4230 markets from Binance.
+2026-02-18 15:42:13,593 - WARNING - 🚨 WARNING: LIVE TRADING IS ENABLED. Real orders will be sent.
+2026-02-18 15:42:13,596 - INFO - ✅ Loaded Strategy: Mean Reversion
+2026-02-18 15:42:13,596 - INFO - ✅ Loaded Strategy: Neutral Grid Bot
+2026-02-18 15:42:13,596 - INFO - ⏳ Pre-loading historical data...
+2026-02-18 15:42:13,795 - INFO - ✅ Pre-loaded 100 candles.
+2026-02-18 15:42:13,795 - INFO - ✅ Production Engine Started. Monitoring BTC/USDT.
+2026-02-18 15:42:44,860 - INFO - 💓 Heartbeat: Engine loop active.
+2026-02-18 15:43:00,603 - INFO - 📊 Strategy Check: Processed 1m candle for 15:42
+2026-02-18 15:43:00,856 - INFO - 📊 Market Scan: Price: 68172.2 | RSI: 52.4 | ADX: 22.0 | BB Range: [68072.7 - 68226.2]
+2026-02-18 15:43:14,884 - INFO - 💓 Heartbeat: Engine loop active.
+2026-02-18 15:43:45,640 - INFO - 💓 Heartbeat: Engine loop active.
+2026-02-18 15:44:00,732 - INFO - 📊 Strategy Check: Processed 1m candle for 15:43
+2026-02-18 15:44:15,966 - INFO - 💓 Heartbeat: Engine loop active.
+2026-02-18 15:44:38,084 - INFO - 🛑 Engine Stopped.

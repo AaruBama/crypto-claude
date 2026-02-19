@@ -1,18 +1,15 @@
 {
-    "balance_usd": 1111.9866776066688,
+    "balance_usd": 1011.9065318995607,
     "positions": {
         "BTCUSDT": {
-            "amount": -0.001493867297177479,
+            "amount": 0.0,
             "avg_price": 67670.0,
             "highest_price": 67670.0,
-            "lowest_price": 67553.99,
-            "stop_loss": 67850.0,
-            "take_profit": 67100.0,
-            "trailing_stop_percent": 0.5,
-            "scaling_targets": [
-                67400.0,
-                67200.0
-            ]
+            "lowest_price": 66994.0,
+            "stop_loss": null,
+            "take_profit": null,
+            "trailing_stop_percent": null,
+            "scaling_targets": []
         },
         "ETHUSDT": {
             "amount": 0.0,
@@ -279,6 +276,14 @@
             "price": 67670.0,
             "amount": 0.00149387,
             "total_usd": 101.09
+        },
+        {
+            "time": "2026-02-18 07:08:16",
+            "pair": "BTCUSDT",
+            "type": "BUY",
+            "price": 66994.0,
+            "amount": 0.00149387,
+            "total_usd": 100.08
         }
     ],
     "initial_balance": 953.0427923883577

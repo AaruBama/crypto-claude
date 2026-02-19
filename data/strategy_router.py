@@ -43,11 +43,11 @@ class StrategyRouter:
             else:
                 return "8_30_EMA", "Stable Trend (Trend Riding)"
             
-        # 3. Ranging / Sideways -> RSI Mean Reversion
+        # 3. Ranging / Sideways -> Bollinger + RSI Scalper
         if regime == "ranging":
             rsi = latest.get('rsi', 50)
             if rsi < 35 or rsi > 65:
-                return "RSI_MEAN_REVERSION", "Market Ranging (Overbought/Oversold)"
+                return "MEAN_REVERSION", "Mean Reversion Opportunity: Price hitting BB extremes with RSI confirmation."
             else:
                  # If RSI is neutral in range, maybe look for VWAP mean reversion?
                 return "VWAP_PULLBACK", "Ranging around Fair Value (VWAP)"
