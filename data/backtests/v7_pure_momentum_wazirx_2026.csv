@@ -1,0 +1,2 @@
+strategy,initial_capital,final_capital,total_pnl,cagr_pct,max_drawdown_pct,total_trades,mr_trades,trend_trades,win_rate_pct,profit_factor,calmar_ratio,sharpe_proxy,fee_drag_pct,avg_hold_hours,fees_model,timeframe
+V7.1 Pure Momentum,300.0,363.46,63.46,21.15,-0.86,34,0,34,67.65,4.93,24.52,1.85,10.65,257.5,exchange=wazirx fee=0.000% slip=0.050%,15min

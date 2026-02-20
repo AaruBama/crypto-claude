@@ -94,7 +94,7 @@ class TradingEngine:
         logger.info(f"⏳ Pre-loading historical data for {self.symbols}...")
         for sym in self.symbols:
             try:
-                ohlcv = self.exchange.client.fetch_ohlcv(sym, timeframe=ENGINE_SETTINGS['timeframe'], limit=100)
+                ohlcv = self.exchange.fetch_ohlcv(sym, timeframe=ENGINE_SETTINGS['timeframe'], limit=100)
                 for candle in ohlcv:
                     ts = datetime.fromtimestamp(candle[0] / 1000)
                     self.candle_managers[sym].add_candle(candle[1], candle[2], candle[3], candle[4], candle[5], ts)
@@ -242,7 +242,7 @@ class TradingEngine:
     def _on_candle_close(self, symbol):
         try:
             # Fetch 2 candles
-            klines = self.exchange.client.fetch_ohlcv(symbol, timeframe=ENGINE_SETTINGS['timeframe'], limit=2)
+            klines = self.exchange.fetch_ohlcv(symbol, timeframe=ENGINE_SETTINGS['timeframe'], limit=2)
             if not klines or len(klines) < 2: return
             
             # Add to manager

@@ -2,12 +2,18 @@
 """
 Basic Exchange Wrapper (Paper Trading by Default)
 Simulates order placement and execution.
-Now supports real data fetching via CCXT.
+Now supports real data fetching via CCXT (Binance) or the native WazirX client.
+
+Set ACTIVE_EXCHANGE=wazirx in .env to route all live trading through WazirX.
+Binance remains the default so existing setups are unaffected.
 """
 import ccxt
 import time
 import logging
-from trading_engine.config import ENGINE_SETTINGS, API_KEY, API_SECRET
+from trading_engine.config import (
+    ENGINE_SETTINGS, API_KEY, API_SECRET,
+    ACTIVE_EXCHANGE, WAZIRX_API_KEY, WAZIRX_SETTINGS,
+)
 
 logger = logging.getLogger("Exchange")
 
@@ -19,82 +25,135 @@ class Exchange:
         self.risk_manager = risk_manager
         self.pending_orders = []  # List of dicts: {id, symbol, side, qty, price, type, timestamp, expiry}
         self.active_positions = [] # List of dicts: {trade_id, symbol, side, qty, entry_price, sl, tp, strategy_id, signal_id}
-        
-        # Initialize CCXT (Public API for data, Private for trading)
+        self.signal_timestamps = {} # {signal_id: start_ms}
+
+        self.exchange_name = ACTIVE_EXCHANGE  # "binance" | "wazirx"
+
+        if self.exchange_name == "wazirx":
+            self._init_wazirx(paper_mode)
+        else:
+            self._init_binance(paper_mode)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Initialisation helpers
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _init_binance(self, paper_mode):
+        """Set up the CCXT Binance client (original behaviour)."""
         ccxt_config = {
             'enableRateLimit': True,
             'timeout': 15000,
         }
-        
         if API_KEY and len(str(API_KEY)) > 5:
-            logger.info(f"🔑 Using API Key: {API_KEY[:4]}...{API_KEY[-4:]}")
+            logger.info(f"🔑 Binance API Key: {API_KEY[:4]}...{API_KEY[-4:]}")
             ccxt_config['apiKey'] = API_KEY
             ccxt_config['secret'] = API_SECRET
         else:
-            logger.info("🌍 No API Key provided (Public Mode)")
-            
+            logger.info("🌍 Binance: No API Key — Public Mode")
+
         self.client = ccxt.binance(ccxt_config)
+        self.wazirx = None
         self.markets = {}
-        self.signal_timestamps = {} # {signal_id: start_ms}
-        
+
         if not paper_mode:
             self._connect_api()
             try:
                 self.markets = self.client.load_markets()
-                logger.info(f"📦 Loaded {len(self.markets)} markets from Binance.")
+                logger.info(f"📦 Loaded {len(self.markets)} Binance markets.")
             except Exception as e:
-                logger.error(f"⚠️ Failed to load markets: {e}")
-            
+                logger.error(f"⚠️ Failed to load Binance markets: {e}")
+
             if self.live_enabled:
-                logger.warning("🚨 WARNING: LIVE TRADING IS ENABLED. Real orders will be sent.")
+                logger.warning("🚨 WARNING: LIVE TRADING IS ENABLED (Binance). Real orders will be sent.")
             else:
-                logger.info("🛡️ SAFE MODE: Live trading disabled in config. Paper trading required.")
+                logger.info("🛡️ SAFE MODE: Live trading disabled. Paper trading only.")
         else:
-            logger.info("🔌 Connected to Exchange (Paper Mode: TRUE, Data: REAL)")
+            logger.info("🔌 Binance — Paper Mode: TRUE, Data: REAL")
+
+    def _init_wazirx(self, paper_mode):
+        """Set up the native WazirX client."""
+        from trading_engine.core.wazirx_client import WazirXClient
+        self.wazirx = WazirXClient()
+        self.client = None   # No CCXT client for WazirX
+        self.markets = {}
+
+        if not paper_mode:
+            if not WAZIRX_API_KEY:
+                logger.error("❌ WAZIRX_API_KEY not set — cannot use live WazirX trading.")
+            else:
+                # Verify connectivity
+                if self.wazirx.ping():
+                    logger.info("✅ WazirX API reachable.")
+                else:
+                    logger.warning("⚠️ WazirX ping failed — check connectivity.")
+
+                # Load account to confirm auth works
+                try:
+                    account = self.wazirx.get_account()
+                    if account:
+                        logger.info("🔑 WazirX account authenticated successfully.")
+                except Exception as e:
+                    logger.error(f"⚠️ WazirX account check failed: {e}")
+
+                if self.live_enabled:
+                    logger.warning("🚨 WARNING: LIVE TRADING IS ENABLED (WazirX). Real orders will be sent.")
+                else:
+                    logger.info("🛡️ SAFE MODE: Live trading disabled. Paper trading only.")
+        else:
+            logger.info("🔌 WazirX — Paper Mode: TRUE, Data: REAL")
 
     def quantize_amount(self, symbol, amount):
         """
         Adjusts amount to respect exchange precision and LOT_SIZE.
-        Prevents 'Dust' leftovers.
+        For WazirX, falls back to 6 decimal places (no CCXT helper available).
         """
+        if self.exchange_name == "wazirx":
+            return round(amount, 6)
+
         if not self.markets or symbol not in self.markets:
-            return round(amount, 6) # Fallback
-            
-        market = self.markets[symbol]
-        precision = market['precision']['amount']
-        
-        # CCXT precision can be decimal places or step size
-        # We simplify by using round to the specified decimal places
-        # Note: In real production we'd use decimal.Decimal for exactness
+            return round(amount, 6)
         return float(self.client.amount_to_precision(symbol, amount))
-    
+
     def _connect_api(self):
-        """
-        Connects to Binance API using ccxt
-        """
+        """Connects to Binance API using ccxt."""
         if not API_KEY:
-             print("❌ WARNING: No API Key found.")
-        print("🔌 Connected to Exchange (Paper: False)")
+            print("❌ WARNING: No Binance API Key found.")
+        print("🔌 Connected to Exchange (Binance, Paper: False)")
 
     def get_ticker(self, symbol="BTC/USDT"):
         """
-        Fetches the full ticker object from the exchange.
+        Fetches the full ticker object from the active exchange.
+        Returns a normalised dict with at least a 'last' key.
         """
         try:
+            if self.exchange_name == "wazirx":
+                return self.wazirx.get_ticker(symbol)
             return self.client.fetch_ticker(symbol)
         except Exception as e:
-            logger.error(f"Ticker Fetch Error: {e}")
+            logger.error(f"Ticker Fetch Error ({self.exchange_name}): {e}")
             return None
 
     def get_latest_price(self, symbol="BTC/USDT"):
         """
-        Fetches the latest ticker price from Binance.
+        Fetches the latest price from the active exchange.
         """
         try:
             ticker = self.get_ticker(symbol)
             return float(ticker['last']) if ticker else 65000.0
-        except Exception as e:
+        except Exception:
             return 65000.0  # Fallback
+
+    def fetch_ohlcv(self, symbol, timeframe=None, limit=100):
+        """
+        Fetch OHLCV candles from the active exchange.
+        Returns list of [timestamp_ms, open, high, low, close, volume].
+        Used by _preload_data and _on_candle_close in main.py via self.exchange.client.fetch_ohlcv —
+        this method provides a unified interface so callers can use either exchange.
+        """
+        tf = timeframe or ENGINE_SETTINGS.get("timeframe", "15m")
+        if self.exchange_name == "wazirx":
+            return self.wazirx.get_klines(symbol, interval=tf, limit=limit)
+        return self.client.fetch_ohlcv(symbol, timeframe=tf, limit=limit)
         
     def create_order(self, symbol, side, qty, price=None, order_type="MARKET", stop_loss=None, take_profit=None, expiry_seconds=300, strategy_id="Unknown", signal_id=None):
         """
@@ -157,80 +216,105 @@ class Exchange:
 
         else:
             # --- LIVE TRADING SAFETY CHECK ---
-            # --- LIVE TRADING EXECUTION ---
             if not self.live_enabled:
-                 raise Exception("⛔ SECURITY BLOCK: LIVE_TRADING_ENABLED is False!")
+                raise Exception("⛔ SECURITY BLOCK: LIVE_TRADING_ENABLED is False!")
 
-            try:
-                # CCXT Order Params
-                ccxt_type = "market"
-                params = {}
-                
-                if order_type == "LIMIT":
-                    ccxt_type = "limit"
-                    params['timeInForce'] = 'GTC'
-                
-                elif order_type == "LIMIT_MAKER":
-                    ccxt_type = "limit"
-                    params['postOnly'] = True
-                    params['timeInForce'] = 'GTC'
-                
-                # Execute via CCXT with Retry Loop for LIMIT_MAKER
-                last_error = None
-                
-                # Determine max retries
-                max_retries = 3 if order_type == "LIMIT_MAKER" else 1
-                
-                for attempt in range(max_retries):
-                    try:
-                        # Update price on retry (Strategy logic usually implies intent to catch the move)
-                        # LIMIT_MAKER implies we want to be Maker. 
-                        # For BUY, we sit on BID. For SELL, we sit on ASK.
-                        if attempt > 0:
-                            logger.info(f"⏳ Waiting 5s before retry {attempt+1}/{max_retries}...")
-                            time.sleep(5)
-                            
-                            # Fetch fresh ticker to adjust price
-                            ticker = self.client.fetch_ticker(symbol)
-                            if side.lower() == 'buy':
-                                price = ticker['bid'] 
-                            else:
-                                price = ticker['ask']
-                            logger.info(f"♻️ RETRY {attempt+1}: Updated {side} Limit Price to {price}")
+            if self.exchange_name == "wazirx":
+                return self._live_order_wazirx(symbol, side, qty, price, order_type, stop_loss)
+            else:
+                return self._live_order_binance(symbol, side, qty, price, order_type)
 
-                        response = self.client.create_order(
-                            symbol=symbol,
-                            type=ccxt_type,
-                            side=side.lower(),
-                            amount=qty,
-                            price=price if "limit" in ccxt_type else None,
-                            params=params
-                        )
-                        
-                        log_msg = f"🚀 LIVE ORDER SENT: {side} {qty} {symbol}"
-                        if "limit" in ccxt_type:
-                            log_msg += f" @ {price}"
-                        logger.info(log_msg)
-                        
-                        return str(response['id'])
+    def _live_order_wazirx(self, symbol, side, qty, price, order_type, stop_loss=None):
+        """
+        Execute a live order on WazirX.
+        WazirX only supports LIMIT and STOP_LIMIT orders — no MARKET type.
+        LIMIT_MAKER is treated as a regular LIMIT (WazirX has no postOnly flag).
+        """
+        if price is None:
+            # WazirX has no market orders — fall back to last price
+            price = self.get_latest_price(symbol)
+            logger.warning(f"⚠️ WazirX: No price supplied for {order_type} order — using last price {price}")
 
-                    except (ccxt.OrderImmediatelyFillable, ccxt.ExchangeError) as e:
-                        # Binance sometimes sends generic ExchangeError for PostOnly
-                        if order_type == "LIMIT_MAKER" and ("PostOnly" in str(e) or "OrderImmediatelyFillable" in str(e)):
-                            logger.warning(f"⚠️ LIMIT_MAKER Rejected (Price moved). Retrying...")
-                            last_error = e
-                            continue
-                        else:
-                            raise e 
-                            
-                # If we exhausted retries
-                if last_error:
-                    logger.error(f"❌ LIVE EXECUTION FAILED after retries: {last_error}")
-                    return None
+        wx_type = "limit"
+        wx_stop = None
+        if order_type in ("STOP_MARKET", "STOP_LIMIT"):
+            wx_type = "stop_limit"
+            wx_stop = stop_loss or price  # Use SL price as the stop trigger
 
-            except Exception as e:
-                logger.error(f"❌ LIVE EXECUTION FAILED: {e}")
+        try:
+            response = self.wazirx.create_order(
+                symbol=symbol,
+                side=side,
+                qty=qty,
+                price=price,
+                order_type=wx_type,
+                stop_price=wx_stop,
+            )
+            if response and response.get("id"):
+                logger.info(f"🚀 WAZIRX LIVE ORDER SENT: {side} {qty} {symbol} @ {price} | ID: {response['id']}")
+                return str(response["id"])
+            else:
+                logger.error(f"❌ WazirX order failed: {response}")
                 return None
+        except Exception as e:
+            logger.error(f"❌ WazirX LIVE EXECUTION FAILED: {e}")
+            return None
+
+    def _live_order_binance(self, symbol, side, qty, price, order_type):
+        """Execute a live order on Binance via CCXT (original logic)."""
+        try:
+            ccxt_type = "market"
+            params = {}
+
+            if order_type == "LIMIT":
+                ccxt_type = "limit"
+                params['timeInForce'] = 'GTC'
+            elif order_type == "LIMIT_MAKER":
+                ccxt_type = "limit"
+                params['postOnly'] = True
+                params['timeInForce'] = 'GTC'
+
+            last_error = None
+            max_retries = 3 if order_type == "LIMIT_MAKER" else 1
+
+            for attempt in range(max_retries):
+                try:
+                    if attempt > 0:
+                        logger.info(f"⏳ Waiting 5s before retry {attempt+1}/{max_retries}...")
+                        time.sleep(5)
+                        ticker = self.client.fetch_ticker(symbol)
+                        price = ticker['bid'] if side.lower() == 'buy' else ticker['ask']
+                        logger.info(f"♻️ RETRY {attempt+1}: Updated {side} Limit Price to {price}")
+
+                    response = self.client.create_order(
+                        symbol=symbol,
+                        type=ccxt_type,
+                        side=side.lower(),
+                        amount=qty,
+                        price=price if "limit" in ccxt_type else None,
+                        params=params
+                    )
+                    log_msg = f"🚀 BINANCE LIVE ORDER SENT: {side} {qty} {symbol}"
+                    if "limit" in ccxt_type:
+                        log_msg += f" @ {price}"
+                    logger.info(log_msg)
+                    return str(response['id'])
+
+                except (ccxt.OrderImmediatelyFillable, ccxt.ExchangeError) as e:
+                    if order_type == "LIMIT_MAKER" and ("PostOnly" in str(e) or "OrderImmediatelyFillable" in str(e)):
+                        logger.warning("⚠️ LIMIT_MAKER Rejected (Price moved). Retrying...")
+                        last_error = e
+                        continue
+                    else:
+                        raise e
+
+            if last_error:
+                logger.error(f"❌ BINANCE LIVE EXECUTION FAILED after retries: {last_error}")
+                return None
+
+        except Exception as e:
+            logger.error(f"❌ BINANCE LIVE EXECUTION FAILED: {e}")
+            return None
 
     # Backwards-compat alias
     def place_order(self, symbol, side, qty, price=None, type="MARKET", **kwargs):
