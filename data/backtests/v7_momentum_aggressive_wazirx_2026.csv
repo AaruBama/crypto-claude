@@ -1,0 +1,2 @@
+strategy,initial_capital,final_capital,total_pnl,cagr_pct,max_drawdown_pct,total_trades,win_rate_pct,profit_factor,calmar_ratio,sharpe_proxy,fee_drag_pct,avg_hold_hours,subscription_cost,fees_model,timeframe,mode
+V7.2 Aggressive Momentum,300.0,282.96,-17.04,-5.68,-1.92,94,48.94,1.0,2.96,0.01,43.46,93.1,17.02,exchange=wazirx fee=0.000% slip=0.050% sub=$17.02,15min,aggressive
