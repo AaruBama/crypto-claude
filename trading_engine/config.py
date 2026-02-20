@@ -29,14 +29,6 @@ MOMENTUM_LOSS_COOLDOWN_HOURS = 48      # Hours to pause after streak
 MOMENTUM_WEEKLY_COMPOUND_THRESHOLD = 1.5  # % weekly PnL to trigger compounding
 MOMENTUM_COMPOUND_FRACTION = 0.5       # Fraction of weekly return to reinvest
 
-# ── Aggressive Momentum Mode (WazirX ZERO — zero per-trade fee) ────────────
-# Enable to relax entry filters, allow 2-level pyramiding, and use earlier
-# partial closes. Safe to toggle: streak protection and survival mode remain.
-MOMENTUM_AGGRESSIVE = os.getenv("MOMENTUM_AGGRESSIVE", "False").lower() == "true"
-MAX_PYRAMID_LEVELS = 2        # Max add-on entries per base position (normal: 1)
-MAX_POSITION_MULTIPLIER = 1.8 # Hard cap: total size ≤ 1.8× original notional
-# ────────────────────────────────────────────────────────────────────────────
-
 # ──────────────────────────────────────────────────────────────────
 # V7.1 Live Trading Ramp-Up (Phased Budget Scaling)
 # When LIVE_TRADING_ENABLED=True, position sizes are multiplied by
