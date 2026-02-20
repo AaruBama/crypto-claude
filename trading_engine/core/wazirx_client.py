@@ -53,6 +53,11 @@ class WazirXClient:
         order  = client.create_order("BTC/USDT", "buy", qty=0.001, price=85000)
     """
 
+    # Minimum seconds between consecutive requests (WazirX allows ~1 req/s for most endpoints)
+    _MIN_REQUEST_INTERVAL = 1.0
+    # Ticker cache TTL in seconds — avoids double-fetching within the same engine tick
+    _TICKER_CACHE_TTL = 2.0
+
     def __init__(self, api_key: str = None, api_secret: str = None):
         self.api_key = api_key or WAZIRX_API_KEY
         self.api_secret = api_secret or WAZIRX_API_SECRET
@@ -60,6 +65,8 @@ class WazirXClient:
         self.recv_window = WAZIRX_SETTINGS["recv_window"]
         self.session = requests.Session()
         self.session.headers.update({"Content-Type": "application/x-www-form-urlencoded"})
+        self._last_request_time = 0.0  # epoch seconds of last outbound request
+        self._ticker_cache: dict[str, tuple[float, dict]] = {}  # symbol → (fetched_at, ticker)
 
         if self.api_key:
             self.session.headers.update({"X-API-KEY": self.api_key})
@@ -82,7 +89,15 @@ class WazirXClient:
             hashlib.sha256,
         ).hexdigest()
 
+    def _throttle(self):
+        """Sleep if needed to stay within the 1 req/s rate limit."""
+        elapsed = time.time() - self._last_request_time
+        if elapsed < self._MIN_REQUEST_INTERVAL:
+            time.sleep(self._MIN_REQUEST_INTERVAL - elapsed)
+        self._last_request_time = time.time()
+
     def _get(self, path: str, params: dict = None, signed: bool = False) -> dict | list:
+        self._throttle()
         params = params or {}
         if signed:
             params["timestamp"] = int(time.time() * 1000)
@@ -100,6 +115,7 @@ class WazirXClient:
             return {}
 
     def _post(self, path: str, params: dict = None) -> dict:
+        self._throttle()
         params = params or {}
         params["timestamp"] = int(time.time() * 1000)
         params["recvWindow"] = self.recv_window
@@ -116,6 +132,7 @@ class WazirXClient:
             return {}
 
     def _delete(self, path: str, params: dict = None) -> dict:
+        self._throttle()
         params = params or {}
         params["timestamp"] = int(time.time() * 1000)
         params["recvWindow"] = self.recv_window
@@ -159,12 +176,19 @@ class WazirXClient:
         Returns a normalised dict compatible with the rest of the engine:
           { 'last', 'bid', 'ask', 'high', 'low', 'volume', 'quoteVolume',
             'change', 'changePercent', 'symbol' }
+        Results are cached for _TICKER_CACHE_TTL seconds to avoid double-fetching
+        within the same engine tick.
         """
+        now = time.time()
+        cached = self._ticker_cache.get(symbol)
+        if cached and (now - cached[0]) < self._TICKER_CACHE_TTL:
+            return cached[1]
+
         wx_symbol = _to_wazirx_symbol(symbol)
         raw = self._get("/sapi/v1/ticker/24hr", params={"symbol": wx_symbol})
         if not raw:
             return {}
-        return {
+        result = {
             "symbol": symbol,
             "last": float(raw.get("lastPrice", 0)),
             "bid": float(raw.get("bidPrice", 0)),
@@ -176,6 +200,8 @@ class WazirXClient:
             "change": float(raw.get("priceChange", 0)),
             "changePercent": float(raw.get("priceChangePercent", 0)),
         }
+        self._ticker_cache[symbol] = (now, result)
+        return result
 
     def get_all_tickers(self) -> list[dict]:
         """Fetch 24-hour tickers for all symbols."""
