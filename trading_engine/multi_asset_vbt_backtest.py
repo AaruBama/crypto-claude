@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import pandas_ta as ta
 import vectorbt as vbt
-from trading_engine.config import STRATEGIES, LIVE_ALLOCATION, ENABLE_MEAN_REVERSION
+from trading_engine.config import STRATEGIES, LIVE_ALLOCATION, ENABLE_MEAN_REVERSION, RISK_SETTINGS, ACTIVE_EXCHANGE
 
 def run_multi_asset_backtest():
     print("🚀 Loading Multi-Asset 5m data (365 Days)...")
@@ -197,8 +197,8 @@ def run_multi_asset_backtest():
     print(f"🔗 Correlation overrides applied to {corr_override.sum()} concurrent signals.")
 
     # ── KEY CHANGE #5: Realistic fee model ──
-    REALISTIC_FEE = 0.00075      # Binance 0.075% with BNB discount
-    REALISTIC_SLIPPAGE = 0.0005  # 0.05% conservative slippage
+    REALISTIC_FEE = RISK_SETTINGS["fee_rate"]           # 0.0% WazirX Zero or 0.075% Binance
+    REALISTIC_SLIPPAGE = RISK_SETTINGS["slippage_penalty"]  # 0.05% slippage
 
     print("🚀 Running VectorBT Simulation for Portfolio 1 (Mean Reversion Tier 1)...")
     pf_mr1 = vbt.Portfolio.from_signals(
@@ -369,11 +369,11 @@ def run_multi_asset_backtest():
         'sharpe_proxy': round(ann_sharpe, 2),
         'fee_drag_pct': round(fee_drag_pct, 2),
         'avg_hold_hours': round(avg_hold_hours, 1),
-        'fees_model': f'fee={REALISTIC_FEE*100:.3f}% slip={REALISTIC_SLIPPAGE*100:.3f}%',
+        'fees_model': f'exchange={ACTIVE_EXCHANGE} fee={REALISTIC_FEE*100:.3f}% slip={REALISTIC_SLIPPAGE*100:.3f}%',
         'timeframe': '15min',
     }])
     
-    output_path = 'data/backtests/v7_pure_momentum_final_2026.csv'
+    output_path = f'data/backtests/v7_pure_momentum_{ACTIVE_EXCHANGE}_2026.csv'
     results_df.to_csv(output_path, index=False)
     print(f"\n💾 Results saved to {output_path}")
 
