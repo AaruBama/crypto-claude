@@ -327,10 +327,24 @@ class WazirXClient:
         data = self._get("/sapi/v1/allOrders", params={"symbol": wx_symbol, "limit": limit}, signed=True)
         return data if isinstance(data, list) else []
 
-    def get_my_trades(self, symbol: str, limit: int = 100) -> list[dict]:
-        """Returns personal trade history for a symbol."""
+    def get_my_trades(self, symbol: str, limit: int = 100, order_id: int = None) -> list[dict]:
+        """
+        Returns personal trade history for a symbol.
+        WazirX requires either orderId or fromId — we use orderId when provided,
+        otherwise fall back to allOrders to find the most recent order ID first.
+        """
         wx_symbol = _to_wazirx_symbol(symbol)
-        data = self._get("/sapi/v1/myTrades", params={"symbol": wx_symbol, "limit": limit}, signed=True)
+        if order_id is None:
+            # Fetch most recent order to get a valid orderId anchor
+            orders = self.get_all_orders(symbol, limit=1)
+            if not orders:
+                return []
+            order_id = orders[-1].get("id")
+        data = self._get(
+            "/sapi/v1/myTrades",
+            params={"symbol": wx_symbol, "orderId": order_id, "limit": limit},
+            signed=True,
+        )
         return data if isinstance(data, list) else []
 
     # ──────────────────────────────────────────────────────────────────────────

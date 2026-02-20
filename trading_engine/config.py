@@ -43,12 +43,13 @@ LIVE_BUDGET_PCT_PHASES = [0.25, 0.50, 1.0]  # Budget multiplier per phase
 MIN_ACCOUNT_BALANCE_USD = 50.0           # Hard floor: pause all entries below this
 
 # Risk Limits
+# fee_rate is overridden at the bottom of this file based on ACTIVE_EXCHANGE.
 RISK_SETTINGS = {
     "max_drawdown_daily": 3.0,        # % of daily starting balance
     "max_position_size_usd": 2000,    # Cap single position size
     "max_open_positions": 50,          # Hard limit on concurrent positions
     "stop_loss_default_pct": 1.5,
-    "fee_rate": 0.00075,              # Binance 0.075% (0.1% - 25% BNB discount)
+    "fee_rate": 0.00075,              # Binance 0.075% — overridden below for WazirX
     "tax_rate": 0.01,                 # Estimated Tax Buffer (1% of profits)
     "slippage_penalty": 0.0005,       # -0.05% slippage on entry & exit (simulated)
     "min_profit_pct": 0.5,            # 🛡️ Quality Filter: Only take trades targeting > 0.50% profit
@@ -246,10 +247,16 @@ WAZIRX_WS_URL = "wss://stream.wazirx.com/stream"
 
 # WazirX-specific engine overrides (applied when ACTIVE_EXCHANGE == "wazirx")
 # WazirX supports only LIMIT and STOP_LIMIT order types (no MARKET orders).
-# Fee tier: 0.2% maker/taker (lower tiers available with WRX token holdings).
+# Fee tier: 0% — WazirX Zero plan active (INR 99/month subscription).
+# Change fee_rate to 0.002 if the Zero plan lapses.
 WAZIRX_SETTINGS = {
-    "fee_rate": 0.002,           # 0.20% default taker fee
+    "fee_rate": 0.0,             # 0% — WazirX Zero plan (INR 99/month)
     "order_types": ["LIMIT", "STOP_LIMIT"],
     "recv_window": 5000,         # ms; max 60000
     "default_timeframe": "15m",  # Matches existing engine timeframe
 }
+
+# Apply exchange-specific fee rate to RISK_SETTINGS so RiskManager
+# and backtest analytics always use the correct cost model.
+if ACTIVE_EXCHANGE == "wazirx":
+    RISK_SETTINGS["fee_rate"] = WAZIRX_SETTINGS["fee_rate"]
