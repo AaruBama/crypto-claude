@@ -32,7 +32,7 @@ MOMENTUM_COMPOUND_FRACTION = 0.5       # Fraction of weekly return to reinvest
 # ── Aggressive Momentum Mode (WazirX ZERO — zero per-trade fee) ────────────
 # Enable to relax entry filters, allow 2-level pyramiding, and use earlier
 # partial closes. Safe to toggle: streak protection and survival mode remain.
-MOMENTUM_AGGRESSIVE = os.getenv("MOMENTUM_AGGRESSIVE", "True").lower() == "true"
+MOMENTUM_AGGRESSIVE = os.getenv("MOMENTUM_AGGRESSIVE", "False").lower() == "true"
 MAX_PYRAMID_LEVELS = 2        # Max add-on entries per base position (normal: 1)
 MAX_POSITION_MULTIPLIER = 1.8 # Hard cap: total size ≤ 1.8× original notional
 # ────────────────────────────────────────────────────────────────────────────
