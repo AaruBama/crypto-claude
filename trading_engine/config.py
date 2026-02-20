@@ -230,3 +230,26 @@ env_key = os.getenv("BINANCE_API_KEY", "")
 API_KEY = env_key if env_key and "your_" not in env_key.lower() else None
 # Check for both common naming conventions
 API_SECRET = os.getenv("BINANCE_API_SECRET") or os.getenv("BINANCE_SECRET_KEY")
+
+# ── WazirX Configuration ──────────────────────────────────────────────────────
+# Set ACTIVE_EXCHANGE=wazirx in .env to route all trading through WazirX.
+# Binance remains the default so existing setups are unaffected.
+ACTIVE_EXCHANGE = os.getenv("ACTIVE_EXCHANGE", "binance").lower()  # "binance" | "wazirx"
+
+_wazirx_key = os.getenv("WAZIRX_API_KEY", "")
+WAZIRX_API_KEY = _wazirx_key if _wazirx_key and "your_" not in _wazirx_key.lower() else None
+WAZIRX_API_SECRET = os.getenv("WAZIRX_API_SECRET") or None
+
+# WazirX REST + WebSocket base URLs (from official docs)
+WAZIRX_BASE_URL = "https://api.wazirx.com"
+WAZIRX_WS_URL = "wss://stream.wazirx.com/stream"
+
+# WazirX-specific engine overrides (applied when ACTIVE_EXCHANGE == "wazirx")
+# WazirX supports only LIMIT and STOP_LIMIT order types (no MARKET orders).
+# Fee tier: 0.2% maker/taker (lower tiers available with WRX token holdings).
+WAZIRX_SETTINGS = {
+    "fee_rate": 0.002,           # 0.20% default taker fee
+    "order_types": ["LIMIT", "STOP_LIMIT"],
+    "recv_window": 5000,         # ms; max 60000
+    "default_timeframe": "15m",  # Matches existing engine timeframe
+}
