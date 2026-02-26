@@ -57,29 +57,24 @@ class TradingEngine:
         # 3. Load Active Strategies
         self.strategies = []
         
-        # BTC Chameleon Adaptive Strategy
-        if "ADAPTIVE_ENGINE" in ACTIVE_STRATEGIES:
-            self.strategies.append(AdaptiveStrategy(
-                "BTC_Adaptive", 
-                params=STRATEGIES["ADAPTIVE_ENGINE"]["params"]
-            ))
-            # Set internal props for strategy routing
-            self.strategies[-1]._symbol = LIVE_ALLOCATION['BTC_Adaptive']['symbol']
-            self.strategies[-1]._budget = LIVE_ALLOCATION['BTC_Adaptive']['budget']
-            logger.info(f"✅ Loaded Strategy: BTC_Adaptive (Budget: ${self.strategies[-1]._budget})")
-
-        # SOL Chameleon Adaptive Strategy
-        if "ADAPTIVE_ENGINE_SOL" in ACTIVE_STRATEGIES:
-            self.strategies.append(AdaptiveStrategy(
-                "SOL_Adaptive",
-                params=STRATEGIES["ADAPTIVE_ENGINE_SOL"]["params"]
-            ))
-            self.strategies[-1]._symbol = LIVE_ALLOCATION['SOL_Adaptive']['symbol']
-            self.strategies[-1]._budget = LIVE_ALLOCATION['SOL_Adaptive']['budget']
-            logger.info(f"✅ Loaded Strategy: SOL_Adaptive (Budget: ${self.strategies[-1]._budget})")
-
-        # Selective Grid
-        if "GRID_TRADING" in ACTIVE_STRATEGIES and False: # Disabled in code
+        # Dynamically load strategies defined in LIVE_ALLOCATION
+        for strategy_name, alloc in LIVE_ALLOCATION.items():
+            strat_key = alloc.get('strategy')
+            if strat_key and strat_key in ACTIVE_STRATEGIES:
+                if strat_key in STRATEGIES:
+                    self.strategies.append(AdaptiveStrategy(
+                        strategy_name, 
+                        params=STRATEGIES[strat_key]["params"]
+                    ))
+                    # Set internal props for strategy routing
+                    self.strategies[-1]._symbol = alloc['symbol']
+                    self.strategies[-1]._budget = alloc['budget']
+                    logger.info(f"✅ Loaded Strategy: {strategy_name} ({alloc['symbol']} | Budget: ${alloc['budget']})")
+                else:
+                    logger.warning(f"⚠️ Strategy key '{strat_key}' not found in STRATEGIES config.")
+        
+        # Grid Trading (Selective/Manual activation logic remains separate if needed)
+        if "GRID_TRADING" in ACTIVE_STRATEGIES and False: 
              pass
         
         self.last_candle_minute = None

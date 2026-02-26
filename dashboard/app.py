@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ai_advisory_helpers import render_ai_advisory_tab
 from dashboard.db_helpers import get_dashboard_stats, get_recent_trades_df, get_recent_signals_df, clear_db, get_multi_bot_comparison, get_live_audit_data
 from dashboard.strategy_lab import render_strategy_lab
+from dashboard.backtest_analytics import render_backtest_analytics
 
 # Try to use real data, fall back to demo if network unavailable
 USE_DEMO_MODE = False
@@ -1178,7 +1179,7 @@ def main():
                 df = IndicatorCalculator.calculate_all(df)
 
         # Tab Navigation
-        tab_list = ["🚀 Market Analysis", "📋 Order Book & Portfolio", "🤖 AI Advisory", "🧪 Strategy Lab", "🏆 Scoreboard", "🛡️ Live Audit"]
+        tab_list = ["🚀 Market Analysis", "📋 Order Book & Portfolio", "🤖 AI Advisory", "📉 Backtest Analysis", "🧪 Strategy Lab", "🏆 Scoreboard", "🛡️ Live Audit"]
         tabs = st.tabs(tab_list)
         
         # Tab 0: Market Analysis
@@ -1220,16 +1221,16 @@ def main():
         with tabs[1]:
             render_orders_page(df, selected_symbol)
         
-        # Tab 2: AI Advisory
-        with tabs[2]:
-            render_ai_advisory_tab(df, selected_symbol, st.session_state.collector)
-    
-        # Tab 3: Strategy Lab
+        # Tab 3: Backtest Analysis
         with tabs[3]:
+            render_backtest_analytics()
+
+        # Tab 4: Strategy Lab
+        with tabs[4]:
             render_strategy_lab()
 
-        # Tab 4: Live Scoreboard
-        with tabs[4]:
+        # Tab 5: Live Scoreboard
+        with tabs[5]:
             st.markdown("## 🏆 Live Signals Scoreboard")
             
             # Fetch Stats

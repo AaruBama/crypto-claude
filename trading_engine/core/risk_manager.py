@@ -27,6 +27,9 @@ class RiskManager:
         self.live_start_path = "data/live_start.txt"
         self.live_start_time = self._load_live_start_time()
         self._min_balance_alert_sent = False
+        
+        # V4 Budget Reservation System
+        self._reserved_budgets = {}
 
     def _load_live_start_time(self) -> datetime:
         """Loads live start time from file or creates new if missing (persistent across restarts)."""

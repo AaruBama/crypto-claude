@@ -6,81 +6,87 @@ import vectorbt as vbt
 from trading_engine.config import STRATEGIES, LIVE_ALLOCATION, ENABLE_MEAN_REVERSION, RISK_SETTINGS, ACTIVE_EXCHANGE
 
 def run_multi_asset_backtest():
-    print("🚀 Loading Multi-Asset 5m data (365 Days)...")
+    print("🚀 Loading multi-asset historical data...")
     
     # Load data
     btc_path = 'data/historical/BTC_USDT_5m_365d.csv'
     sol_path = 'data/historical/SOL_USDT_5m_365d.csv'
+    eth_path = 'data/historical/ETH_USDT_5m_90d.csv'
     
-    if not os.path.exists(btc_path) or not os.path.exists(sol_path):
-        print("❌ Missing historical data. Please ensure 365d data exists.")
-        return
-        
-    df_btc = pd.read_csv(btc_path)
-    df_btc['time'] = pd.to_datetime(df_btc['time'])
-    df_btc.set_index('time', inplace=True)
+    paths = {'BTC': btc_path, 'SOL': sol_path, 'ETH': eth_path}
+    dfs = {}
     
-    df_sol = pd.read_csv(sol_path)
-    df_sol['time'] = pd.to_datetime(df_sol['time'])
-    df_sol.set_index('time', inplace=True)
-    
-    # ── KEY CHANGE #1: Resample 5m → 15m for realistic trade frequency ──
-    print("⏳ Resampling to 15m and aligning indices...")
-    df_btc = df_btc.resample('15min').agg({
-        'open': 'first', 'high': 'max', 'low': 'min', 
-        'close': 'last', 'volume': 'sum'
-    }).dropna()
-    df_sol = df_sol.resample('15min').agg({
-        'open': 'first', 'high': 'max', 'low': 'min', 
-        'close': 'last', 'volume': 'sum'
-    }).dropna()
+    for sym, path in paths.items():
+        if os.path.exists(path):
+            df = pd.read_csv(path)
+            df['time'] = pd.to_datetime(df['time'])
+            df.set_index('time', inplace=True)
+            # Resample 5m → 15m
+            print(f"⏳ Resampling {sym} to 15m...")
+            dfs[sym] = df.resample('15min').agg({
+                'open': 'first', 'high': 'max', 'low': 'min', 
+                'close': 'last', 'volume': 'sum'
+            }).dropna()
+        else:
+            print(f"⚠️ Missing historical data for {sym} at {path}")
 
-    # Align on common timestamps
-    common_idx = df_btc.index.intersection(df_sol.index)
-    df_btc = df_btc.loc[common_idx]
-    df_sol = df_sol.loc[common_idx]
+    if len(dfs) < 2:
+        print("❌ Not enough data for multi-asset backtest (min 2 assets).")
+        return
+
+    # Align on common timestamps (this will truncate to the shortest - likely ETH 90d)
+    common_idx = dfs[list(dfs.keys())[0]].index
+    for sym in list(dfs.keys())[1:]:
+        common_idx = common_idx.intersection(dfs[sym].index)
     
-    close = pd.DataFrame({'BTC': df_btc['close'], 'SOL': df_sol['close']}).dropna()
+    for sym in dfs:
+        dfs[sym] = dfs[sym].loc[common_idx]
+    
+    close = pd.DataFrame({sym: dfs[sym]['close'] for sym in dfs}).dropna()
+    print(f"✅ Aligned {len(dfs)} assets over {len(close)} bars (Shortest: {min(dfs.keys()) if 'ETH' in dfs else 'BTC/SOL'}).")
     
     print("📈 Calculating Indicators...")
     
     configs = {
         'BTC': STRATEGIES['ADAPTIVE_ENGINE']['params'],
-        'SOL': STRATEGIES['ADAPTIVE_ENGINE_SOL']['params']
+        'SOL': STRATEGIES['ADAPTIVE_ENGINE_SOL']['params'],
+        'ETH': STRATEGIES['ADAPTIVE_ENGINE']['params'] # Baseline ETH using BTC params
     }
     
     budgets = {
-        'BTC': LIVE_ALLOCATION['BTC_Adaptive']['budget'], # 200
-        'SOL': LIVE_ALLOCATION['SOL_Adaptive']['budget']  # 100
+        'BTC': LIVE_ALLOCATION['BTC_Adaptive']['budget'],
+        'SOL': LIVE_ALLOCATION['SOL_Adaptive']['budget'],
+        'ETH': 100.0 # Standard test budget for ETH
     }
     
     # Boolean DataFrames for entries/shorts
-    mr1_entries = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
-    mr1_shorts  = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
-    mr2_entries = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
-    mr2_shorts  = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
+    mr1_entries = pd.DataFrame(index=close.index, columns=close.columns, data=False)
+    mr1_shorts  = pd.DataFrame(index=close.index, columns=close.columns, data=False)
+    mr2_entries = pd.DataFrame(index=close.index, columns=close.columns, data=False)
+    mr2_shorts  = pd.DataFrame(index=close.index, columns=close.columns, data=False)
     
-    trend_entries = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
-    trend_shorts  = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=False)
+    trend_entries = pd.DataFrame(index=close.index, columns=close.columns, data=False)
+    trend_shorts  = pd.DataFrame(index=close.index, columns=close.columns, data=False)
     
     # Size DataFrames
-    mr1_size        = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
-    mr2_size        = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
-    trend_size_tp   = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
-    trend_size_trail = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
+    mr1_size        = pd.DataFrame(index=close.index, columns=close.columns, data=0.0)
+    mr2_size        = pd.DataFrame(index=close.index, columns=close.columns, data=0.0)
+    trend_size_tp   = pd.DataFrame(index=close.index, columns=close.columns, data=0.0)
+    trend_size_trail = pd.DataFrame(index=close.index, columns=close.columns, data=0.0)
     
     # SL/TP DataFrames
-    sl_mr1   = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
-    tp_mr1   = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
-    sl_mr2   = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
-    sl_trend = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
-    tp_trend = pd.DataFrame(index=close.index, columns=['BTC', 'SOL'], data=0.0)
+    sl_mr1   = pd.DataFrame(index=close.index, columns=close.columns, data=0.0)
+    tp_mr1   = pd.DataFrame(index=close.index, columns=close.columns, data=0.0)
+    sl_mr2   = pd.DataFrame(index=close.index, columns=close.columns, data=0.0)
+    sl_trend = pd.DataFrame(index=close.index, columns=close.columns, data=0.0)
+    tp_trend = pd.DataFrame(index=close.index, columns=close.columns, data=0.0)
     
     # Portfolio correlation over last 100 periods
     print("🔗 Calculating Rolling Correlation...")
-    rolling_corr = close['BTC'].rolling(100).corr(close['SOL']).fillna(0)
+    # Use average pairwise correlation for and n-asset filter
+    rolling_corr = close.rolling(100).corr().groupby(level=0).mean().mean(axis=1).fillna(0)
     
-    for sym, df_orig in [('BTC', df_btc), ('SOL', df_sol)]:
+    for sym, df_orig in dfs.items():
         df = df_orig.reindex(close.index)
         cfg = configs[sym]
         budget = budgets[sym]
@@ -139,10 +145,10 @@ def run_multi_asset_backtest():
             mr_buy  = pd.Series(False, index=close.index)
             mr_sell = pd.Series(False, index=close.index)
         else:
-            # BTC long-only MR, SOL requires engulfing
+            # BTC long-only MR, SOL/ETH requires engulfing
             if sym == 'BTC':
                 mr_sell = pd.Series(False, index=close.index)
-            elif sym == 'SOL':
+            else:
                 mr_buy  = mr_buy & bullish_engulfing
                 mr_sell = mr_sell & bearish_engulfing
         
@@ -186,13 +192,12 @@ def run_multi_asset_backtest():
         tp_trend[sym] = (atr * 5.0 / c_close).fillna(0.02)
 
     # Correlation Filter for Trend Size
-    both_trend = (trend_entries['BTC'] | trend_shorts['BTC']) & (trend_entries['SOL'] | trend_shorts['SOL'])
-    corr_override = both_trend & (rolling_corr > 0.8)
+    active_trend = (trend_entries | trend_shorts).sum(axis=1) > 1
+    corr_override = active_trend & (rolling_corr > 0.8)
     
-    trend_size_tp.loc[corr_override, 'BTC'] *= 0.5
-    trend_size_tp.loc[corr_override, 'SOL'] *= 0.5
-    trend_size_trail.loc[corr_override, 'BTC'] *= 0.5
-    trend_size_trail.loc[corr_override, 'SOL'] *= 0.5
+    for sym in close.columns:
+        trend_size_tp.loc[corr_override, sym] *= 0.5
+        trend_size_trail.loc[corr_override, sym] *= 0.5
     
     print(f"🔗 Correlation overrides applied to {corr_override.sum()} concurrent signals.")
 
@@ -287,7 +292,7 @@ def run_multi_asset_backtest():
     
     print("\n--- Asset Breakdown ---")
     asset_pnl = pf_mr1.total_profit() + pf_mr2.total_profit() + pf_trend_tp.total_profit() + pf_trend_trail.total_profit()
-    for sym in ['BTC', 'SOL']:
+    for sym in close.columns:
         print(f"{sym:<4}: PnL ${asset_pnl[sym]:.2f}")
         
     print("\n--- Performance Metrics ---")
