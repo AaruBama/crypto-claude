@@ -116,15 +116,54 @@ The dashboard will open in your browser at `http://localhost:8501`
   - Possible short squeeze up
 - **Near zero** = Balanced market
 
-## 🎯 Next Steps (Phase 2)
+## 🚀 Chameleon V7.1: Adaptive Pure Momentum
 
-Now that you have visibility into the market, you can:
+Chameleon V7.1 is a major upgrade focus on **Pure Momentum** and **Capital Preservation**. It eliminates counter-trend "bleeding" by dynamically disabling mean reversion during strong market breakouts.
 
-1. **Backtest strategies** using historical data
-2. **Build a paper trading bot** to test without risk
-3. **Implement risk management** (position sizing, stop losses)
-4. **Add alert system** for trading opportunities
-5. **Create performance tracking** to measure results
+### Deployment Guide (V7.1)
+
+#### 1. Configure the Environment
+Copy `.env.template` to `.env` and ensure the following flags are set correctly for your stage:
+
+```bash
+# Recommended for first 48h (Smoke Test)
+PAPER_TRADING=True
+LIVE_TRADING_ENABLED=False
+
+# Strategy Setup
+ENABLE_MEAN_REVERSION=False
+ENABLE_MOMENTUM_BREAKOUT=True
+
+# Assets (Managed in trading_engine/config.py)
+# Currently set to 100% BTC ($300 allocation)
+```
+
+#### 2. Local Verification
+Before zipping for remote deployment, verify the backtest results match your configuration:
+```bash
+PYTHONPATH=. ./venv/bin/python trading_engine/multi_asset_vbt_backtest.py
+```
+
+#### 3. Push to Remote VM
+Use the optimized deployment script to package and upload the code:
+```bash
+./deploy_remote.sh
+```
+
+#### 4. Remote Monitoring
+Once deployed, monitor the logs on your GCP instance:
+```bash
+# Connect to VM
+gcloud compute ssh crypto-trading-bot --zone=asia-south1-a
+
+# View live logs
+tail -f bot/logs/engine.log
+```
+
+## 🎯 Phase 2: Live Deployment Workflow
+1. **Backtest Selection**: Choose the best performing pair (V7.1: Solo BTC).
+2. **Paper Smoke Test**: Run for 48-72 hours on VM with `PAPER_TRADING=True`.
+3. **Phased Ramp-up**: (Automated in V7.1) Once `LIVE_TRADING_ENABLED=True`, the engine scales from 25% → 100% budget over 21 days.
 
 ## ⚠️ Important Notes
 

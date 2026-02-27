@@ -1,11 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chameleon V7 | Ultimate Backtest Report</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
     <style>
         :root {
             --bg-dark: #0a0b0d;
@@ -18,7 +21,11 @@
             --glass-border: rgba(255, 255, 255, 0.05);
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
         body {
             background-color: var(--bg-dark);
@@ -45,6 +52,7 @@
             font-weight: 800;
             background: linear-gradient(135deg, #fff 0%, #ffaa00 100%);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 10px;
             letter-spacing: -1px;
@@ -153,8 +161,13 @@
             border-bottom: 1px solid rgba(255, 255, 255, 0.02);
         }
 
-        .pnl-pos { color: var(--success); }
-        .pnl-neg { color: var(--danger); }
+        .pnl-pos {
+            color: var(--success);
+        }
+
+        .pnl-neg {
+            color: var(--danger);
+        }
 
         .tag {
             background: rgba(255, 170, 0, 0.1);
@@ -174,11 +187,17 @@
         }
 
         @media (max-width: 768px) {
-            .comparison-grid { grid-template-columns: 1fr; }
-            .hero-title { font-size: 2.5rem; }
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-title {
+                font-size: 2.5rem;
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
@@ -190,27 +209,27 @@
         <div class="kpi-grid">
             <div class="card">
                 <div class="kpi-label"><span>🛡️</span> Max Drawdown</div>
-                <div class="kpi-value">-0.92%</div>
-                <div class="kpi-sub">Institutional Grade</div>
+                <div class="kpi-value">-4.55%</div>
+                <div class="kpi-sub">Solo BTC Volatility</div>
             </div>
             <div class="card">
                 <div class="kpi-label"><span>💹</span> Annualized PnL</div>
-                <div class="kpi-value">+19.82%</div>
-                <div class="kpi-sub">Pure Momentum Regime</div>
+                <div class="kpi-value">+26.33%</div>
+                <div class="kpi-sub">Pure BTC Momentum</div>
             </div>
             <div class="card">
                 <div class="kpi-label"><span>🎯</span> Profit Factor</div>
-                <div class="kpi-value">4.44</div>
-                <div class="kpi-sub">High Conviction Trading</div>
+                <div class="kpi-value">21.76</div>
+                <div class="kpi-sub">Exceptional Conviction</div>
             </div>
             <div class="card">
                 <div class="kpi-label"><span>⚡</span> Win Rate</div>
-                <div class="kpi-value">64.7%</div>
-                <div class="kpi-sub">Selectivity Filter Active</div>
+                <div class="kpi-value">90.0%</div>
+                <div class="kpi-sub">High Precision Entry</div>
             </div>
         </div>
 
-        <h2 class="section-title">Regime A/B Comparison</h2>
+        <h2 class="section-title">Historical Legacy Benchmark</h2>
         <div class="chart-container">
             <div id="regime-chart" style="height: 450px;"></div>
         </div>
@@ -229,25 +248,15 @@
                         <thead>
                             <tr>
                                 <th>ASSET</th>
-                                <th>90D PNL</th>
-                                <th>DRAWDOWN</th>
+                                <th>365D PNL</th>
+                                <th>RESULT</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td><span class="tag">BTC</span> Bitcoin</td>
-                                <td class="pnl-pos">+$13.32</td>
-                                <td>-0.42%</td>
-                            </tr>
-                            <tr>
-                                <td><span class="tag">ETH</span> Ethereum</td>
-                                <td class="pnl-pos">+$0.64</td>
-                                <td>-0.51%</td>
-                            </tr>
-                            <tr>
-                                <td><span class="tag">SOL</span> Solana</td>
-                                <td class="pnl-neg">-$3.91</td>
-                                <td>-1.20%</td>
+                                <td class="pnl-pos">+$78.99</td>
+                                <td style="color: var(--success)">100% ALLOCATION</td>
                             </tr>
                         </tbody>
                     </table>
@@ -257,7 +266,8 @@
 
         <h2 class="section-title">Exchange Implementation</h2>
         <div class="card">
-            <p style="margin-bottom: 20px; color: var(--text-muted)">Cross-exchange verification ensures strategy robustness against different fee structures and liquidity profiles.</p>
+            <p style="margin-bottom: 20px; color: var(--text-muted)">Cross-exchange verification ensures strategy
+                robustness against different fee structures and liquidity profiles.</p>
             <table>
                 <thead>
                     <tr>
@@ -318,12 +328,12 @@
 
         // Asset Pie Chart
         Plotly.newPlot('asset-chart', [{
-            labels: ['BTC', 'ETH', 'SOL'],
-            values: [13.32, 0.64, 0], // Using abs for pie, showing only positive contribution or logic
+            labels: ['BTC'],
+            values: [100],
             type: 'pie',
             hole: 0.6,
             marker: {
-                colors: ['#ffaa00', '#627eea', '#14f195']
+                colors: ['#ffaa00']
             },
             textinfo: 'label+percent',
             insidetextorientation: 'radial'
@@ -334,4 +344,5 @@
         });
     </script>
 </body>
+
 </html>

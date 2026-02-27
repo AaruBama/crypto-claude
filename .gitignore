@@ -44,3 +44,7 @@ Thumbs.db
 # Data/Database
 data/storage/*.db
 data/__pycache__/
+
+# Deployment Archives
+*.zip
+crypto_bot_deploy.zip

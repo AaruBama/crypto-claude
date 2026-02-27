@@ -21,11 +21,11 @@ echo "🚀 Starting Deployment to $VM_NAME ($ZONE) in project $PROJECT_ID..."
 # 1. Package Code
 echo "📦 Zipping project (excluding heavy/local files)..."
 rm -f crypto_bot_deploy.zip
-zip -r -q crypto_bot_deploy.zip . -x "venv/*" -x ".git/*" -x "__pycache__/*" -x "data/*" -x "*.DS_Store" -x "deploy_remote.sh"
+zip -r -q crypto_bot_deploy.zip . -x ".env" -x "venv/*" -x ".git/*" -x "__pycache__/*" -x "data/*" -x "*.DS_Store" -x "deploy_remote.sh"
 
 # 2. Upload to VM
 echo "📤 Uploading zip to VM..."
-gcloud compute scp crypto_bot_deploy.zip $VM_NAME:~ --zone=$ZONE --project=$PROJECT_ID --quiet
+gcloud compute scp crypto_bot_deploy.zip $VM_NAME:~ --zone=$ZONE --project=$PROJECT_ID --tunnel-through-iap
 if [ $? -ne 0 ]; then
     echo "❌ Upload failed. Check VM_NAME, ZONE, and PROJECT_ID."
     exit 1
@@ -33,7 +33,7 @@ fi
 
 # 3. Remote Execution (Safe Swap & Restart)
 echo "🔄 Executing remote update..."
-gcloud compute ssh $VM_NAME --zone=$ZONE --project=$PROJECT_ID --command="
+gcloud compute ssh $VM_NAME --zone=$ZONE --project=$PROJECT_ID --tunnel-through-iap --command="
     # 1. Unzip to temporary folder
     sudo rm -rf bot_new
     unzip -q crypto_bot_deploy.zip -d bot_new

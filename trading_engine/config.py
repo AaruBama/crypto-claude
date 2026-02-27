@@ -186,9 +186,7 @@ ACTIVE_STRATEGIES = ["ADAPTIVE_ENGINE", "ADAPTIVE_ENGINE_SOL"]
 #                                               ONLY when 1D ADX < 20
 # ──────────────────────────────────────────────────────────────────
 LIVE_ALLOCATION = {
-    "BTC_Adaptive": {"budget": 200.0, "symbol": "BTC/USDT", "strategy": "ADAPTIVE_ENGINE"},
-    "SOL_Adaptive": {"budget": 100.0, "symbol": "SOL/USDT", "strategy": "ADAPTIVE_ENGINE_SOL"},
-    # "USDT_Reserve": None  (Fully Deployed)
+    "BTC_Adaptive": {"budget": 300.0, "symbol": "BTC/USDT", "strategy": "ADAPTIVE_ENGINE"},
 }
 
 # ------------------------------------------------------------------

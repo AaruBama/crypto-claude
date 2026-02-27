@@ -8,21 +8,24 @@ from trading_engine.config import STRATEGIES, LIVE_ALLOCATION, ENABLE_MEAN_REVER
 def run_multi_asset_backtest():
     print("🚀 Loading multi-asset historical data...")
     
-    # Load data
-    btc_path = 'data/historical/BTC_USDT_5m_365d.csv'
-    sol_path = 'data/historical/SOL_USDT_5m_365d.csv'
-    eth_path = 'data/historical/ETH_USDT_5m_90d.csv'
-    
-    paths = {'BTC': btc_path, 'SOL': sol_path, 'ETH': eth_path}
+    # Load data dynamically based on LIVE_ALLOCATION
     dfs = {}
     
-    for sym, path in paths.items():
+    for strategy_name, alloc in LIVE_ALLOCATION.items():
+        sym = alloc['symbol'].split('/')[0]
+        # Primary check: 5m data (resampled to 15m)
+        path = f'data/historical/{sym}_USDT_5m_365d.csv'
+        
+        # Fallback to 90d for newer assets if 365d is missing
+        if not os.path.exists(path):
+            path = f'data/historical/{sym}_USDT_5m_90d.csv'
+            
         if os.path.exists(path):
             df = pd.read_csv(path)
             df['time'] = pd.to_datetime(df['time'])
             df.set_index('time', inplace=True)
             # Resample 5m → 15m
-            print(f"⏳ Resampling {sym} to 15m...")
+            print(f"⏳ Resampling {sym} to 15m from {path}...")
             dfs[sym] = df.resample('15min').agg({
                 'open': 'first', 'high': 'max', 'low': 'min', 
                 'close': 'last', 'volume': 'sum'
@@ -30,34 +33,35 @@ def run_multi_asset_backtest():
         else:
             print(f"⚠️ Missing historical data for {sym} at {path}")
 
-    if len(dfs) < 2:
-        print("❌ Not enough data for multi-asset backtest (min 2 assets).")
+    if len(dfs) < 1:
+        print("❌ No data found for specified assets.")
         return
 
-    # Align on common timestamps (this will truncate to the shortest - likely ETH 90d)
+    # Align on common timestamps
     common_idx = dfs[list(dfs.keys())[0]].index
-    for sym in list(dfs.keys())[1:]:
-        common_idx = common_idx.intersection(dfs[sym].index)
+    if len(dfs) > 1:
+        for sym in list(dfs.keys())[1:]:
+            common_idx = common_idx.intersection(dfs[sym].index)
     
     for sym in dfs:
         dfs[sym] = dfs[sym].loc[common_idx]
     
     close = pd.DataFrame({sym: dfs[sym]['close'] for sym in dfs}).dropna()
-    print(f"✅ Aligned {len(dfs)} assets over {len(close)} bars (Shortest: {min(dfs.keys()) if 'ETH' in dfs else 'BTC/SOL'}).")
+    print(f"✅ Aligned {len(dfs)} assets over {len(close)} bars.")
     
     print("📈 Calculating Indicators...")
     
-    configs = {
-        'BTC': STRATEGIES['ADAPTIVE_ENGINE']['params'],
-        'SOL': STRATEGIES['ADAPTIVE_ENGINE_SOL']['params'],
-        'ETH': STRATEGIES['ADAPTIVE_ENGINE']['params'] # Baseline ETH using BTC params
-    }
-    
-    budgets = {
-        'BTC': LIVE_ALLOCATION['BTC_Adaptive']['budget'],
-        'SOL': LIVE_ALLOCATION['SOL_Adaptive']['budget'],
-        'ETH': 100.0 # Standard test budget for ETH
-    }
+    # Map symbols to their respective strategy params and budgets from LIVE_ALLOCATION
+    configs = {}
+    budgets = {}
+    for strategy_name, alloc in LIVE_ALLOCATION.items():
+        sym = alloc['symbol'].split('/')[0]
+        strat_key = alloc['strategy']
+        if strat_key in STRATEGIES:
+            configs[sym] = STRATEGIES[strat_key]['params']
+            budgets[sym] = alloc['budget']
+        else:
+            print(f"⚠️ Strategy {strat_key} not found for {sym}")
     
     # Boolean DataFrames for entries/shorts
     mr1_entries = pd.DataFrame(index=close.index, columns=close.columns, data=False)
